@@ -11,3 +11,4 @@ website/out/
 website/.vercel/
 website/.turbo/
 website/.env*
+website/tsconfig.tsbuildinfo
