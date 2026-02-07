@@ -1,0 +1,13 @@
+.build/
+DerivedData/
+.DS_Store
+.swiftpm/
+Package.resolved
+dist/
+.claude/
+website/node_modules/
+website/.next/
+website/out/
+website/.vercel/
+website/.turbo/
+website/.env*

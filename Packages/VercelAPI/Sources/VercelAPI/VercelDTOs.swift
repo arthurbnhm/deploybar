@@ -1,0 +1,290 @@
+import Foundation
+
+struct UserResponse: Decodable {
+    let user: UserDTO
+}
+
+struct UserDTO: Decodable {
+    let id: String
+    let username: String
+    let email: String?
+}
+
+struct TeamListResponse: Decodable {
+    let teams: [TeamDTO]
+}
+
+struct TeamDTO: Decodable {
+    let id: String
+    let slug: String
+    let name: String
+}
+
+struct ProjectListResponse: Decodable {
+    let projects: [ProjectDTO]
+
+    private enum CodingKeys: String, CodingKey {
+        case projects = "projects"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let array = try? container.decode([ProjectDTO].self) {
+            self.projects = array
+            return
+        }
+
+        let keyed = try decoder.container(keyedBy: CodingKeys.self)
+        self.projects = try keyed.decode([ProjectDTO].self, forKey: .projects)
+    }
+}
+
+struct ProjectDTO: Decodable {
+    let id: String
+    let name: String
+    let accountId: String?
+    let updatedAt: Int64
+}
+
+struct DeploymentListResponse: Decodable {
+    let deployments: [DeploymentDTO]
+
+    private enum CodingKeys: String, CodingKey {
+        case deployments
+    }
+
+    init(from decoder: Decoder) throws {
+        let keyed = try decoder.container(keyedBy: CodingKeys.self)
+        self.deployments = try keyed.decodeIfPresent([DeploymentDTO].self, forKey: .deployments) ?? []
+    }
+}
+
+struct DeploymentDTO: Decodable {
+    let uid: String
+    let projectId: String
+    let state: String?
+    let readyState: String?
+    let url: String
+    let created: Int64
+    let meta: DeploymentMeta?
+}
+
+struct DeploymentMeta: Decodable {
+    let githubCommitMessage: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case githubCommitMessage = "githubCommitMessage"
+    }
+}
+
+struct DeploymentEventListResponse: Decodable {
+    let events: [DeploymentEventDTO]
+
+    private enum CodingKeys: String, CodingKey {
+        case events
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let array = try? container.decode([DeploymentEventDTO].self) {
+            self.events = array
+            return
+        }
+        let keyed = try decoder.container(keyedBy: CodingKeys.self)
+        self.events = try keyed.decodeIfPresent([DeploymentEventDTO].self, forKey: .events) ?? []
+    }
+}
+
+struct DeploymentEventDTO: Decodable {
+    let created: Int64
+    let type: String
+    let text: String
+
+    private enum CodingKeys: String, CodingKey {
+        case created
+        case type
+        case text
+        case payload
+        case message
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        if let createdInt = try? container.decode(Int64.self, forKey: .created) {
+            created = createdInt
+        } else if let createdDouble = try? container.decode(Double.self, forKey: .created) {
+            created = Int64(createdDouble)
+        } else if let createdString = try? container.decode(String.self, forKey: .created), let createdInt = Int64(createdString) {
+            created = createdInt
+        } else if
+            let payload = try? container.decode(LooseJSON.self, forKey: .payload),
+            let payloadDate = payload["date"]?.int64Value
+        {
+            created = payloadDate
+        } else {
+            created = Int64(Date().timeIntervalSince1970 * 1000)
+        }
+
+        type = (try? container.decode(String.self, forKey: .type)) ?? "event"
+
+        if let directText = try? container.decode(String.self, forKey: .text), !directText.isEmpty {
+            text = directText
+            return
+        }
+
+        if let directMessage = try? container.decode(String.self, forKey: .message), !directMessage.isEmpty {
+            text = directMessage
+            return
+        }
+
+        if let payload = try? container.decode(LooseJSON.self, forKey: .payload) {
+            if let message = payload.preferredLogMessage, !message.isEmpty {
+                text = message
+                return
+            }
+        }
+
+        text = type
+    }
+}
+
+private struct LooseJSON: Decodable {
+    let value: JSONNode
+
+    init(from decoder: Decoder) throws {
+        value = try JSONNode(from: decoder)
+    }
+
+    subscript(key: String) -> JSONNode? {
+        guard case let .object(object) = value else {
+            return nil
+        }
+        return object[key]
+    }
+
+    var preferredLogMessage: String? {
+        value.preferredLogMessage
+    }
+}
+
+private indirect enum JSONNode: Decodable {
+    case string(String)
+    case number(Double)
+    case bool(Bool)
+    case null
+    case array([JSONNode])
+    case object([String: JSONNode])
+
+    init(from decoder: Decoder) throws {
+        if let container = try? decoder.singleValueContainer() {
+            if container.decodeNil() {
+                self = .null
+                return
+            }
+            if let value = try? container.decode(String.self) {
+                self = .string(value)
+                return
+            }
+            if let value = try? container.decode(Double.self) {
+                self = .number(value)
+                return
+            }
+            if let value = try? container.decode(Bool.self) {
+                self = .bool(value)
+                return
+            }
+            if let value = try? container.decode([String: JSONNode].self) {
+                self = .object(value)
+                return
+            }
+            if let value = try? container.decode([JSONNode].self) {
+                self = .array(value)
+                return
+            }
+        }
+
+        self = .null
+    }
+
+    var int64Value: Int64? {
+        switch self {
+        case let .number(number):
+            return Int64(number)
+        case let .string(string):
+            return Int64(string)
+        default:
+            return nil
+        }
+    }
+
+    var stringValue: String? {
+        switch self {
+        case let .string(string):
+            return string
+        case let .number(number):
+            return String(number)
+        case let .bool(value):
+            return String(value)
+        default:
+            return nil
+        }
+    }
+
+    var preferredLogMessage: String? {
+        switch self {
+        case let .string(string):
+            return string
+
+        case let .object(object):
+            if
+                let name = object["name"]?.stringValue,
+                !name.isEmpty,
+                let value = object["value"]?.stringValue,
+                !value.isEmpty
+            {
+                return "\(name): \(value)"
+            }
+
+            let prioritizedKeys = ["text", "message", "error", "stderr", "stdout", "name", "id", "deploymentId"]
+            for key in prioritizedKeys {
+                if let string = object[key]?.stringValue, !string.isEmpty {
+                    return string
+                }
+            }
+
+            if let info = object["info"]?.preferredLogMessage, !info.isEmpty {
+                return info
+            }
+            if let nestedPayload = object["payload"]?.preferredLogMessage, !nestedPayload.isEmpty {
+                return nestedPayload
+            }
+
+            let compactPairs = object.compactMap { key, value -> String? in
+                guard let string = value.stringValue, !string.isEmpty else { return nil }
+                return "\(key): \(string)"
+            }.sorted()
+
+            if !compactPairs.isEmpty {
+                return compactPairs.joined(separator: " | ")
+            }
+            return nil
+
+        case let .array(values):
+            let messages = values.compactMap(\.preferredLogMessage).filter { !$0.isEmpty }
+            if messages.isEmpty {
+                return nil
+            }
+            return messages.joined(separator: " | ")
+
+        case let .number(number):
+            return String(number)
+
+        case let .bool(value):
+            return String(value)
+
+        case .null:
+            return nil
+        }
+    }
+}
