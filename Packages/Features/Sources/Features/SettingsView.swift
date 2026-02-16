@@ -77,16 +77,8 @@ private struct TokenConnectionSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Vercel Connection")
-                    .font(.system(size: 13, weight: .semibold))
-                Spacer()
-                if isConnected, !isEditing {
-                    Text("Connected")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-            }
+            Text("Vercel Connection")
+                .font(.system(size: 13, weight: .semibold))
 
             if isEditing {
                 VStack(alignment: .leading, spacing: 8) {
@@ -149,13 +141,19 @@ private struct TokenConnectionSection: View {
 
                     Spacer()
 
-                    Button("Change Token") {
-                        tokenDraft = ""
-                        isEditingToken = true
-                        tokenFieldFocused = true
+                    VStack(alignment: .trailing, spacing: 8) {
+                        Text("Connected")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+
+                        Button("Change Token") {
+                            tokenDraft = ""
+                            isEditingToken = true
+                            tokenFieldFocused = true
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                 }
             }
 
