@@ -144,12 +144,9 @@ extension DeployBarAppStore {
                 monitorCadence = .idle
                 try? env.tokenStore.clearToken()
                 await env.monitoringEngine.resetState()
-                monitorTask?.cancel()
-                projectStatuses = []
-                aggregateStatus = .unknown
-                lastRefreshAt = nil
                 authUser = nil
-                phase = .onboarding
+                tokenNotice = nil
+                enterSetupRequiredState()
                 return settings.pollingProfile.idleInterval
             default:
                 monitorError = error.localizedDescription

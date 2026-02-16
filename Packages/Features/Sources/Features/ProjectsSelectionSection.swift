@@ -39,88 +39,98 @@ struct ProjectsSelectionSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.sectionSpacing) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Scope")
-                        .font(.system(size: 13, weight: .semibold))
-
-                    Spacer()
-
-                    Picker("Scope", selection: $store.selectedScope) {
-                        Text("Personal").tag(TeamScope.personal)
-                        ForEach(store.teams) { team in
-                            Text(team.name).tag(TeamScope.team(id: team.id, slug: team.slug))
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .onChange(of: store.selectedScope) { _, _ in
-                        Task {
-                            await store.refreshProjectsForScope()
-                            if persistSelectionChanges {
-                                store.updateWatchedProjects()
-                            }
-                        }
-                    }
-                }
-
-                Text("Choose which account or team to load projects from.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("Watched Projects")
-                        .font(.system(size: 13, weight: .semibold))
-                    Spacer()
-                    Text("\(store.selectedProjectIDs.count) / 20")
-                        .font(.system(size: 11, weight: .medium).monospacedDigit())
+        Group {
+            if store.authUser == nil {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Connect your Vercel token to load teams and projects.", systemImage: "key.fill")
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
+            } else {
+                VStack(alignment: .leading, spacing: DesignSystem.sectionSpacing) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Scope")
+                                .font(.system(size: 13, weight: .semibold))
 
-                if !watchedProjects.isEmpty {
-                    FlowLayout(spacing: 6) {
-                        ForEach(watchedProjects) { project in
-                            ProjectChip(name: project.name) {
-                                toggleProject(project.id)
+                            Spacer()
+
+                            Picker("Scope", selection: $store.selectedScope) {
+                                Text("Personal").tag(TeamScope.personal)
+                                ForEach(store.teams) { team in
+                                    Text(team.name).tag(TeamScope.team(id: team.id, slug: team.slug))
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .labelsHidden()
+                            .onChange(of: store.selectedScope) { _, _ in
+                                Task {
+                                    await store.refreshProjectsForScope()
+                                    if persistSelectionChanges {
+                                        store.updateWatchedProjects()
+                                    }
+                                }
                             }
                         }
-                    }
-                    .animation(.snappy(duration: 0.25), value: store.selectedProjectIDs)
-                }
 
-                if !unwatchedProjects.isEmpty {
-                    Button {
-                        projectSearchText = ""
-                        showProjectPicker.toggle()
-                    } label: {
-                        Label("Add Project", systemImage: "plus.circle.fill")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .popover(isPresented: $showProjectPicker, arrowEdge: .bottom) {
-                        projectPickerPopover
-                    }
-                }
-
-                if watchedProjects.isEmpty {
-                    if store.availableProjects.isEmpty {
-                        Label("No projects found for this scope.", systemImage: "tray")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("Add at least one project to start monitoring.")
+                        Text("Choose which account or team to load projects from.")
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                     }
-                }
 
-                if store.selectedProjectIDs.count >= 20 {
-                    Text("Project limit reached. Remove one project before adding another.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Watched Projects")
+                                .font(.system(size: 13, weight: .semibold))
+                            Spacer()
+                            Text("\(store.selectedProjectIDs.count) / 20")
+                                .font(.system(size: 11, weight: .medium).monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+
+                        if !watchedProjects.isEmpty {
+                            FlowLayout(spacing: 6) {
+                                ForEach(watchedProjects) { project in
+                                    ProjectChip(name: project.name) {
+                                        toggleProject(project.id)
+                                    }
+                                }
+                            }
+                            .animation(.snappy(duration: 0.25), value: store.selectedProjectIDs)
+                        }
+
+                        if !unwatchedProjects.isEmpty {
+                            Button {
+                                projectSearchText = ""
+                                showProjectPicker.toggle()
+                            } label: {
+                                Label("Add Project", systemImage: "plus.circle.fill")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .popover(isPresented: $showProjectPicker, arrowEdge: .bottom) {
+                                projectPickerPopover
+                            }
+                        }
+
+                        if watchedProjects.isEmpty {
+                            if store.availableProjects.isEmpty {
+                                Label("No projects found for this scope.", systemImage: "tray")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text("Add at least one project to start monitoring.")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        if store.selectedProjectIDs.count >= 20 {
+                            Text("Project limit reached. Remove one project before adding another.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
         }

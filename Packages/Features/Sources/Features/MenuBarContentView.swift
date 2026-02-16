@@ -21,7 +21,7 @@ public struct MenuBarContentView: View {
             SubtleDivider()
 
             if store.phase != .running {
-                onboardingPrompt
+                setupPrompt
                     .padding(14)
             } else {
                 projectList
@@ -70,15 +70,15 @@ public struct MenuBarContentView: View {
         }
     }
 
-    private var onboardingPrompt: some View {
+    private var setupPrompt: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Set up DeployBar to start monitoring your Vercel production deploys.")
+                Text("Finish setup in Projects settings to start monitoring your Vercel production deploys.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
 
-                Button("Open Setup") {
-                    presentWindow(.main, openWindow: openWindow)
+                Button("Open Projects Settings") {
+                    presentWindow(.settings, openWindow: openWindow)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)

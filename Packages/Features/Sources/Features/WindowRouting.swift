@@ -3,14 +3,11 @@ import Foundation
 import SwiftUI
 
 public enum DeployBarWindow: String {
-    case main = "deploybar-main"
     case settings = "deploybar-settings"
     case logs = "deploybar-logs"
 
     public var titleHint: String {
         switch self {
-        case .main:
-            "DeployBar"
         case .settings:
             "DeployBar Settings"
         case .logs:

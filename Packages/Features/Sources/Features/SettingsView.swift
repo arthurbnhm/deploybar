@@ -42,13 +42,159 @@ private struct ProjectsSettingsPane: View {
             }
 
             Section {
+                TokenConnectionSection(store: store)
+            }
+
+            Section {
                 ProjectsSelectionSection(
                     store: store,
                     persistSelectionChanges: true
                 )
+                .disabled(store.isValidatingToken)
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+private struct TokenConnectionSection: View {
+    @ObservedObject var store: DeployBarAppStore
+    @State private var tokenDraft = ""
+    @State private var isEditingToken = false
+    @FocusState private var tokenFieldFocused: Bool
+
+    private var isConnected: Bool {
+        store.authUser != nil
+    }
+
+    private var isEditing: Bool {
+        !isConnected || isEditingToken
+    }
+
+    private var submitDisabled: Bool {
+        store.isValidatingToken || tokenDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Vercel Connection")
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer()
+                if isConnected, !isEditing {
+                    Text("Connected")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if isEditing {
+                VStack(alignment: .leading, spacing: 8) {
+                    SecureField("Paste your Vercel token...", text: $tokenDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($tokenFieldFocused)
+
+                    HStack(spacing: 8) {
+                        Button {
+                            Task {
+                                let success = await store.updateToken(tokenDraft)
+                                if success {
+                                    tokenDraft = ""
+                                    isEditingToken = false
+                                } else {
+                                    tokenFieldFocused = true
+                                }
+                            }
+                        } label: {
+                            if store.isValidatingToken {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .frame(minWidth: 20)
+                            } else {
+                                Text(isConnected ? "Save Token" : "Connect Token")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .disabled(submitDisabled)
+
+                        if isConnected {
+                            Button("Cancel") {
+                                tokenDraft = ""
+                                isEditingToken = false
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .disabled(store.isValidatingToken)
+                        }
+                    }
+                }
+            } else if let user = store.authUser {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.green)
+                        .padding(.top, 1)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("@\(user.username)")
+                            .font(.system(size: 13, weight: .semibold))
+
+                        if let email = user.email {
+                            Text(email)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Spacer()
+
+                    Button("Change Token") {
+                        tokenDraft = ""
+                        isEditingToken = true
+                        tokenFieldFocused = true
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+
+            Link("Get your Vercel token", destination: DeployBarAppStore.tokenHelpURL)
+                .font(.system(size: 12, weight: .medium))
+
+            if let notice = store.tokenNotice {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.green)
+
+                    Text(notice)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.green.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+
+            if let error = store.tokenError {
+                ErrorInlineBanner(message: error)
+            }
+        }
+        .onAppear {
+            if !isConnected {
+                isEditingToken = true
+                tokenFieldFocused = true
+            }
+        }
+        .onChange(of: store.authUser?.id) { _, newID in
+            if newID == nil {
+                isEditingToken = true
+                tokenFieldFocused = true
+            }
+        }
     }
 }
 

@@ -70,13 +70,9 @@ struct DeployBarMainApp: App {
         } label: {
             MenuBarLabelView(aggregateStatus: store.aggregateStatus)
                 .background(SettingsWindowBridgeView())
+                .background(SetupRequiredBridgeView(store: store))
         }
         .menuBarExtraStyle(.window)
-
-        WindowGroup("DeployBar", id: DeployBarWindow.main.rawValue) {
-            DeployBarRootWindowView(store: store)
-        }
-        .defaultSize(width: 920, height: 720)
 
         Window("DeployBar Settings", id: DeployBarWindow.settings.rawValue) {
             DeployBarSettingsView(store: store)
@@ -119,5 +115,35 @@ private struct SettingsWindowBridgeView: View {
                     presentWindow(.settings, openWindow: openWindow)
                 }
             }
+    }
+}
+
+private struct SetupRequiredBridgeView: View {
+    @ObservedObject var store: DeployBarAppStore
+    @Environment(\.openWindow) private var openWindow
+    @State private var didPresentForCurrentNeed = false
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .task {
+                presentSettingsIfNeeded()
+            }
+            .onChange(of: store.requiresSetup) { _, requiresSetup in
+                if requiresSetup {
+                    presentSettingsIfNeeded()
+                } else {
+                    didPresentForCurrentNeed = false
+                }
+            }
+    }
+
+    private func presentSettingsIfNeeded() {
+        guard store.requiresSetup, !didPresentForCurrentNeed else {
+            return
+        }
+
+        didPresentForCurrentNeed = true
+        presentWindow(.settings, openWindow: openWindow)
     }
 }

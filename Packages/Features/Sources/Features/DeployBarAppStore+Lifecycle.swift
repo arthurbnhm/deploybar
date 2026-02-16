@@ -17,8 +17,8 @@ extension DeployBarAppStore {
                 tokenStore: env.tokenStore
             )
         } catch {
-            phase = .onboarding
-            tokenError = userFacingOnboardingError(error)
+            enterSetupRequiredState()
+            tokenError = userFacingAuthError(error)
             return
         }
 
@@ -31,7 +31,7 @@ extension DeployBarAppStore {
         selectedScope = settings.selectedScope
 
         guard !startupContext.storedToken.isEmpty else {
-            phase = .onboarding
+            enterSetupRequiredState()
             return
         }
 
@@ -40,18 +40,12 @@ extension DeployBarAppStore {
             authUser = user
             try await loadTeamsAndProjects()
             tokenError = nil
-
-            if !settings.watchedProjects.isEmpty {
-                phase = .running
-                startMonitoringLoop(immediate: true)
-                return
-            }
-            phase = .onboarding
+            activateMonitoringIfReady()
         } catch {
             if AuthBootstrapService.shouldRequireTokenReconnect(for: error) {
                 try? env.tokenStore.clearToken()
                 authUser = nil
-                phase = .onboarding
+                enterSetupRequiredState()
                 tokenError = "This Vercel token is invalid or no longer authorized."
                 return
             }
@@ -63,9 +57,29 @@ extension DeployBarAppStore {
                 phase = .running
                 startMonitoringLoop(immediate: true)
             } else {
-                phase = .onboarding
+                enterSetupRequiredState()
             }
         }
+    }
+
+    func activateMonitoringIfReady() {
+        guard authUser != nil, !settings.watchedProjects.isEmpty else {
+            enterSetupRequiredState()
+            return
+        }
+
+        phase = .running
+        startMonitoringLoop(immediate: true)
+    }
+
+    func enterSetupRequiredState() {
+        phase = .setupRequired
+        monitorTask?.cancel()
+        monitorTask = nil
+        projectStatuses = []
+        aggregateStatus = .unknown
+        monitorCadence = .idle
+        lastRefreshAt = nil
     }
 
     func triggerNotificationTestIfJustEnabled(wasEnabled: Bool, isEnabled: Bool) {
@@ -97,7 +111,7 @@ extension DeployBarAppStore {
         }
     }
 
-    func userFacingOnboardingError(_ error: Error) -> String {
+    func userFacingAuthError(_ error: Error) -> String {
         if let deployError = error as? DeployBarError {
             switch deployError {
             case .missingToken:
