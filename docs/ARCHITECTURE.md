@@ -19,6 +19,20 @@ DeployBar uses a modular architecture:
 5. State transitions trigger notifications/sounds.
 6. Logs are fetched on demand and cached in SQLite.
 
+## State & UI Organization
+
+- `DeployBarAppStore.swift`: root observable state and startup entry points.
+- `DeployBarAppStore+Lifecycle.swift`: bootstrap, persistence helpers, and onboarding error mapping.
+- `DeployBarAppStore+Onboarding.swift`: token connect, scope/project loading, onboarding completion.
+- `DeployBarAppStore+Monitoring.swift`: polling loop, cadence selection, transition handling.
+- `DeployBarAppStore+LogsAndAccount.swift`: logs sheet data flow and account/data reset actions.
+- `AuthBootstrapService.swift`, `ProjectSelectionService.swift`, `TransitionNotificationService.swift`: pure domain helpers extracted from the store.
+- UI shared components are split by concern:
+  - `DesignSystem.swift`
+  - `SurfaceCards.swift`
+  - `StatusComponents.swift`
+  - `ProjectsSelectionSection.swift`
+
 ## Polling Strategy
 
 Polling intervals are derived from selected profile and runtime conditions:

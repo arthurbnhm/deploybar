@@ -2,6 +2,20 @@ import AppKit
 import Foundation
 import SwiftUI
 
+public enum DeployBarWindow: String {
+    case main = "deploybar-main"
+    case settings = "deploybar-settings"
+
+    public var titleHint: String {
+        switch self {
+        case .main:
+            "DeployBar"
+        case .settings:
+            "DeployBar Settings"
+        }
+    }
+}
+
 @MainActor
 public func presentWindow(id: String, titleHint: String, openWindow: OpenWindowAction) {
     NSApp.activate(ignoringOtherApps: true)
@@ -12,4 +26,9 @@ public func presentWindow(id: String, titleHint: String, openWindow: OpenWindowA
             existing.makeKeyAndOrderFront(nil)
         }
     }
+}
+
+@MainActor
+public func presentWindow(_ window: DeployBarWindow, openWindow: OpenWindowAction) {
+    presentWindow(id: window.rawValue, titleHint: window.titleHint, openWindow: openWindow)
 }

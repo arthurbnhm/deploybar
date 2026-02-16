@@ -1,5 +1,32 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="7" fill="#1A1A1A"/>
-  <path d="M16 7L24 22H8L16 7Z" fill="white"/>
-  <circle cx="23" cy="9" r="4" fill="#33C77A"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="tile" x1="18" y1="14" x2="110" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7F8FA"/>
+      <stop offset="1" stop-color="#E9EDF3"/>
+    </linearGradient>
+    <linearGradient id="triangle" x1="43" y1="28" x2="94" y2="93" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C7A3FF"/>
+      <stop offset="0.52" stop-color="#7B78FF"/>
+      <stop offset="1" stop-color="#3B57F4"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(60 46) rotate(32) scale(44 34)">
+      <stop stop-color="#F8F0FF" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#F8F0FF" stop-opacity="0"/>
+    </radialGradient>
+    <path id="triangle-shape" d="M64 31L95 88H33L64 31Z"/>
+    <clipPath id="triangle-clip">
+      <use href="#triangle-shape"/>
+    </clipPath>
+  </defs>
+
+  <rect x="6" y="6" width="116" height="116" rx="30" fill="url(#tile)"/>
+  <rect x="6.5" y="6.5" width="115" height="115" rx="29.5" stroke="#D4DAE4"/>
+
+  <g transform="translate(0 2)">
+    <ellipse cx="64" cy="89" rx="26" ry="9" fill="#4B5EED" fill-opacity="0.22"/>
+    <use href="#triangle-shape" fill="url(#triangle)"/>
+    <ellipse cx="57" cy="52" rx="30" ry="20" fill="url(#glow)" clip-path="url(#triangle-clip)"/>
+    <ellipse cx="66" cy="82" rx="24" ry="9" fill="#2739B8" fill-opacity="0.16" clip-path="url(#triangle-clip)"/>
+    <use href="#triangle-shape" fill="none" stroke="#EBDFFF" stroke-opacity="0.42" stroke-width="2.2" stroke-linejoin="round"/>
+  </g>
 </svg>

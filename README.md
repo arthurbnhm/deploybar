@@ -65,3 +65,19 @@ npm run lint
 ## Privacy
 
 DeployBar sends API requests only to Vercel and stores data locally. No analytics or telemetry are included in V1.
+
+## Keychain Prompts
+
+DeployBar stores your Vercel token in macOS Keychain under `com.deploybar.token`.
+
+If macOS keeps asking for Keychain access:
+
+1. Choose `Always Allow` in the Keychain prompt (not just `Allow`).
+2. Use one installed app location (`~/Applications/DeployBar.app` or `/Applications/DeployBar.app`).
+3. Prefer signing with a stable identity when installing during development:
+
+```bash
+CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" ./scripts/install_app.sh
+```
+
+Using ad-hoc signatures (`-`) may trigger repeated Keychain trust prompts after app updates.

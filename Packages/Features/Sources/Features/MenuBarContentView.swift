@@ -85,7 +85,7 @@ public struct MenuBarContentView: View {
                     .foregroundStyle(.secondary)
 
                 Button("Open Setup") {
-                    presentWindow(id: "deploybar-main", titleHint: "DeployBar", openWindow: openWindow)
+                    presentWindow(.main, openWindow: openWindow)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
@@ -134,7 +134,7 @@ public struct MenuBarContentView: View {
             Spacer()
 
             Button {
-                presentWindow(id: "deploybar-settings", titleHint: "DeployBar Settings", openWindow: openWindow)
+                presentWindow(.settings, openWindow: openWindow)
             } label: {
                 Label("Settings", systemImage: "gearshape")
             }

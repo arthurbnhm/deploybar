@@ -1,187 +1,327 @@
 import Core
 import SwiftUI
 
+enum OnboardingStep: Int, CaseIterable {
+    case connect
+    case projects
+    case review
+
+    var index: Int { rawValue + 1 }
+
+    var title: String {
+        switch self {
+        case .connect: "Connect Your Account"
+        case .projects: "Choose Watched Projects"
+        case .review: "Review & Start"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .connect: "Add a Vercel access token to unlock your teams and projects."
+        case .projects: "Pick the scope and projects DeployBar should monitor."
+        case .review: "Confirm your setup and start monitoring deployments."
+        }
+    }
+
+    var primaryActionTitle: String {
+        switch self {
+        case .connect: "Continue"
+        case .projects: "Continue"
+        case .review: "Start Monitoring"
+        }
+    }
+}
+
 public struct OnboardingView: View {
     @ObservedObject var store: DeployBarAppStore
+    @State private var step: OnboardingStep = .connect
+    @State private var isCompleting = false
 
     public init(store: DeployBarAppStore) {
         self.store = store
     }
 
+    private var selectedProjects: [Project] {
+        store.availableProjects
+            .filter { store.selectedProjectIDs.contains($0.id) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                hero
-                tokenSection
-
-                if store.authUser != nil {
-                    connectedBadge
-                    scopeAndProjectsSection
-                    preferencesSection
-
-                    Button {
-                        Task { await store.completeOnboarding() }
-                    } label: {
-                        Text("Start Monitoring")
-                            .font(.system(size: 14, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(!store.canFinishOnboarding)
-                }
+            VStack(alignment: .leading, spacing: 14) {
+                headerCard
+                wizardCard
 
                 if let error = store.tokenError {
                     ErrorInlineBanner(message: error)
                 }
             }
-            .padding(28)
-            .frame(width: 560)
+            .padding(24)
+            .frame(width: 620)
         }
-        .animation(.easeInOut(duration: 0.2), value: store.authUser != nil)
+        .onAppear {
+            syncStepToCurrentState(animated: false)
+        }
+        .onChange(of: store.authUser?.id) { _, _ in
+            syncStepToCurrentState(animated: true)
+        }
+        .onChange(of: store.selectedProjectIDs) { _, _ in
+            if step == .review, store.selectedProjectIDs.isEmpty {
+                withAnimation(.snappy(duration: 0.2)) {
+                    step = .projects
+                }
+            }
+        }
     }
 
-    private var hero: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Image(systemName: "triangle.fill")
-                .font(.system(size: 30, weight: .semibold))
-                .foregroundStyle(.tint)
+    private var headerCard: some View {
+        AppCard {
+            HStack(spacing: 12) {
+                Image(systemName: "triangle.fill")
+                    .font(.system(size: 30, weight: .semibold))
+                    .foregroundStyle(.primary)
 
-            Text("DeployBar")
-                .font(.system(size: 30, weight: .bold))
+                Text("DeployBar")
+                    .font(.system(size: 42, weight: .bold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+        }
+    }
 
-            Text("Live Vercel production status in your menu bar.")
+    private var wizardCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: DesignSystem.sectionSpacing) {
+                wizardHeader
+
+                SubtleDivider()
+
+                stepContent
+
+                SubtleDivider()
+
+                wizardFooter
+            }
+        }
+    }
+
+    private var wizardHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Step \(step.index) of \(OnboardingStep.allCases.count)")
+                    .font(.system(size: 11, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                HStack(spacing: 6) {
+                    ForEach(OnboardingStep.allCases, id: \.self) { item in
+                        Capsule(style: .continuous)
+                            .fill(item.rawValue <= step.rawValue ? Color.accentColor.opacity(0.75) : Color.black.opacity(0.08))
+                            .frame(width: item == step ? 26 : 14, height: 5)
+                    }
+                }
+                .animation(.snappy(duration: 0.2), value: step)
+            }
+
+            Text(step.title)
+                .font(.system(size: 22, weight: .bold))
+
+            Text(step.subtitle)
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
         }
     }
 
-    private var tokenSection: some View {
-        AppCard {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Vercel Access Token")
-                    .font(.system(size: 13, weight: .semibold))
+    @ViewBuilder
+    private var stepContent: some View {
+        switch step {
+        case .connect:
+            connectStepContent
+        case .projects:
+            ProjectsSelectionSection(
+                store: store,
+                persistSelectionChanges: false
+            )
+        case .review:
+            reviewStepContent
+        }
+    }
 
-                HStack(spacing: 8) {
-                    SecureField("Paste your token", text: $store.tokenInput)
-                        .textFieldStyle(.roundedBorder)
+    private var connectStepContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Vercel Access Token")
+                .font(.system(size: 13, weight: .semibold))
 
-                    Button {
-                        Task { await store.connectToken() }
-                    } label: {
-                        if store.isValidatingToken {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Text(store.authUser == nil ? "Connect" : "Connected")
-                                .frame(minWidth: 78)
+            HStack(spacing: 8) {
+                SecureField("Paste your token...", text: $store.tokenInput)
+                    .textFieldStyle(.roundedBorder)
+
+                Button {
+                    Task {
+                        await store.connectToken()
+                        if store.authUser != nil {
+                            syncStepToCurrentState(animated: true)
                         }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(store.isValidatingToken || store.authUser != nil)
+                } label: {
+                    if store.isValidatingToken {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text(store.authUser == nil ? "Connect" : "Connected")
+                            .frame(minWidth: 82)
+                    }
                 }
+                .buttonStyle(.borderedProminent)
+                .disabled(store.isValidatingToken || store.authUser != nil)
+            }
+
+            if let user = store.authUser {
+                Label("Connected as @\(user.username)", systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.green)
             }
         }
     }
 
-    private var connectedBadge: some View {
-        AppCard {
-            Label("Connected as @\(store.authUser?.username ?? "")", systemImage: "checkmark.circle.fill")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color.green)
+    private var reviewStepContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ReviewLine(title: "Account", value: "@\(store.authUser?.username ?? "Not connected")")
+            ReviewLine(title: "Scope", value: selectedScopeLabel)
+            ReviewLine(title: "Watched Projects", value: "\(store.selectedProjectIDs.count) / 20")
+
+            if selectedProjects.isEmpty {
+                Text("No projects selected yet.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(selectedProjects.prefix(4))) { project in
+                        Text("- \(project.name)")
+                            .font(.system(size: 12))
+                            .lineLimit(1)
+                    }
+
+                    if selectedProjects.count > 4 {
+                        Text("+\(selectedProjects.count - 4) more")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.top, 4)
+            }
         }
     }
 
-    private var scopeAndProjectsSection: some View {
-        AppCard {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("Scope")
-                        .font(.system(size: 13, weight: .semibold))
-
-                    Picker("Scope", selection: $store.selectedScope) {
-                        Text("Personal").tag(TeamScope.personal)
-                        ForEach(store.teams) { team in
-                            Text(team.name).tag(TeamScope.team(id: team.id, slug: team.slug))
-                        }
+    private var wizardFooter: some View {
+        HStack {
+            if step != .connect {
+                Button("Back") {
+                    guard let previousStep = OnboardingStep(rawValue: step.rawValue - 1) else {
+                        return
                     }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .onChange(of: store.selectedScope) { _, _ in
-                        Task { await store.refreshProjectsForScope() }
+                    withAnimation(.snappy(duration: 0.2)) {
+                        step = previousStep
                     }
                 }
+                .buttonStyle(.bordered)
+            }
 
-                HStack {
-                    Text("Projects")
-                        .font(.system(size: 13, weight: .semibold))
-                    Spacer()
-                    Text("\(store.selectedProjectIDs.count)/20")
-                        .font(.system(size: 11, weight: .medium).monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
+            Spacer()
 
-                if store.availableProjects.isEmpty {
-                    Text("No projects found for this scope.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
+            Button {
+                handlePrimaryAction()
+            } label: {
+                if isCompleting {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(minWidth: 28)
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 4) {
-                            ForEach(store.availableProjects) { project in
-                                ProjectSelectionRow(
-                                    name: project.name,
-                                    isSelected: store.selectedProjectIDs.contains(project.id)
-                                ) {
-                                    store.toggleProjectSelection(project.id)
-                                }
-                            }
-                        }
-                        .padding(4)
-                    }
-                    .frame(height: 240)
-                    .background(Color.primary.opacity(0.03))
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(.quaternary, lineWidth: 0.5)
-                    )
+                    Text(step.primaryActionTitle)
+                        .frame(minWidth: 112)
                 }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(primaryActionDisabled)
+        }
+    }
+
+    private var primaryActionDisabled: Bool {
+        switch step {
+        case .connect:
+            return store.authUser == nil
+        case .projects:
+            return store.selectedProjectIDs.isEmpty
+        case .review:
+            return !store.canFinishOnboarding || isCompleting
+        }
+    }
+
+    private var selectedScopeLabel: String {
+        switch store.selectedScope {
+        case .personal:
+            return "Personal"
+        case let .team(id, slug):
+            return store.teams.first(where: { $0.id == id })?.name ?? slug
+        }
+    }
+
+    private func handlePrimaryAction() {
+        switch step {
+        case .connect:
+            withAnimation(.snappy(duration: 0.2)) {
+                step = .projects
+            }
+        case .projects:
+            withAnimation(.snappy(duration: 0.2)) {
+                step = .review
+            }
+        case .review:
+            isCompleting = true
+            Task {
+                await store.completeOnboarding()
+                isCompleting = false
             }
         }
     }
 
-    private var preferencesSection: some View {
-        AppCard {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Preferences")
-                    .font(.system(size: 13, weight: .semibold))
+    private func syncStepToCurrentState(animated: Bool) {
+        let target: OnboardingStep
+        if store.authUser == nil {
+            target = .connect
+        } else if store.selectedProjectIDs.isEmpty {
+            target = .projects
+        } else if step == .connect {
+            target = .projects
+        } else {
+            target = step
+        }
 
-                SettingsToggleRow(
-                    title: "Notifications",
-                    subtitle: "Notify on deployment success/failure",
-                    icon: "bell.fill",
-                    isOn: $store.onboardingNotificationsEnabled
-                )
-
-                Divider()
-
-                SettingsToggleRow(
-                    title: "Sound effects",
-                    subtitle: "Play system sound on terminal status changes",
-                    icon: "speaker.wave.2.fill",
-                    isOn: $store.onboardingSoundsEnabled
-                )
-
-                Divider()
-
-                SettingsToggleRow(
-                    title: "Launch at login",
-                    subtitle: "Start DeployBar automatically",
-                    icon: "power",
-                    isOn: $store.onboardingLaunchAtLogin
-                )
+        if animated {
+            withAnimation(.snappy(duration: 0.2)) {
+                step = target
             }
+        } else {
+            step = target
+        }
+    }
+}
+
+private struct ReviewLine: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+            Spacer()
+            Text(value)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
     }
 }

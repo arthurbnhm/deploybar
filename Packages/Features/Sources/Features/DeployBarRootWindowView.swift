@@ -14,15 +14,7 @@ public struct DeployBarRootWindowView: View {
 
     public var body: some View {
         ZStack {
-            GlassBackgroundView(material: .hudWindow)
-                .ignoresSafeArea()
-
-            LinearGradient(
-                colors: [Color.white.opacity(0.06), Color.black.opacity(0.10)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            backgroundLayer
 
             content
         }
@@ -33,6 +25,39 @@ public struct DeployBarRootWindowView: View {
         }
         .task {
             if case .running = store.phase { dismissWindow(id: windowID) }
+        }
+    }
+
+    @ViewBuilder
+    private var backgroundLayer: some View {
+        switch store.phase {
+        case .onboarding:
+            ZStack {
+                LinearGradient(
+                    colors: [DesignSystem.windowLightTop, DesignSystem.windowLightBottom],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+
+                RadialGradient(
+                    colors: [Color.white.opacity(0.75), Color.clear],
+                    center: .topLeading,
+                    startRadius: 30,
+                    endRadius: 420
+                )
+                .ignoresSafeArea()
+            }
+        case .loading, .unsupported, .running:
+            GlassBackgroundView(material: .hudWindow)
+                .ignoresSafeArea()
+
+            LinearGradient(
+                colors: [Color.white.opacity(0.06), Color.black.opacity(0.10)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
         }
     }
 

@@ -2,10 +2,49 @@ import AppKit
 import Features
 import SwiftUI
 
+@MainActor
+final class SettingsWindowOpener {
+    static let shared = SettingsWindowOpener()
+
+    private var openAction: (() -> Void)?
+
+    private init() {}
+
+    func register(_ action: @escaping () -> Void) {
+        openAction = action
+    }
+
+    func openSettingsWindow() {
+        if let existing = NSApp.windows.first(where: { $0.title.localizedCaseInsensitiveContains(DeployBarWindow.settings.titleHint) }) {
+            existing.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        openAction?()
+    }
+}
+
 final class DeployBarAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_: Notification) {
+        if let iconPath = Bundle.main.path(forResource: "AppIcon", ofType: "icns"),
+           let iconImage = NSImage(contentsOfFile: iconPath) {
+            NSApp.applicationIconImage = iconImage
+        }
+
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard !flag else {
+            return true
+        }
+
+        Task { @MainActor in
+            SettingsWindowOpener.shared.openSettingsWindow()
+        }
+        return true
     }
 }
 
@@ -30,19 +69,20 @@ struct DeployBarMainApp: App {
             MenuBarContentView(store: store)
         } label: {
             MenuBarLabelView(aggregateStatus: store.aggregateStatus)
+                .background(SettingsWindowBridgeView())
         }
         .menuBarExtraStyle(.window)
 
-        WindowGroup("DeployBar", id: "deploybar-main") {
+        WindowGroup("DeployBar", id: DeployBarWindow.main.rawValue) {
             DeployBarRootWindowView(store: store)
         }
         .defaultSize(width: 920, height: 720)
 
-        Window("DeployBar Settings", id: "deploybar-settings") {
+        Window("DeployBar Settings", id: DeployBarWindow.settings.rawValue) {
             DeployBarSettingsView(store: store)
         }
         .windowResizability(.contentSize)
-        .defaultSize(width: 760, height: 560)
+        .defaultSize(width: 520, height: 490)
         .commands {
             SettingsCommands()
         }
@@ -55,9 +95,23 @@ private struct SettingsCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .appSettings) {
             Button("Settings...") {
-                presentWindow(id: "deploybar-settings", titleHint: "DeployBar Settings", openWindow: openWindow)
+                presentWindow(.settings, openWindow: openWindow)
             }
             .keyboardShortcut(",", modifiers: .command)
         }
+    }
+}
+
+private struct SettingsWindowBridgeView: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .onAppear {
+                SettingsWindowOpener.shared.register {
+                    presentWindow(.settings, openWindow: openWindow)
+                }
+            }
     }
 }

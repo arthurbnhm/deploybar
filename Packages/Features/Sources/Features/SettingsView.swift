@@ -1,456 +1,247 @@
 import Core
 import SwiftUI
 
-private enum SettingsPane: String, CaseIterable, Identifiable {
-    case projects = "Projects"
-    case monitoring = "Monitoring"
-    case account = "Account & Data"
-
-    var id: String { rawValue }
-
-    var title: String { rawValue }
-
-    var subtitle: String {
-        switch self {
-        case .projects:
-            return "Choose scope and watched repositories"
-        case .monitoring:
-            return "Control refresh behavior and alerts"
-        case .account:
-            return "Manage local data and sign-out"
-        }
-    }
-
-    var symbolName: String {
-        switch self {
-        case .projects:
-            return "shippingbox.fill"
-        case .monitoring:
-            return "waveform.path.ecg"
-        case .account:
-            return "person.crop.circle.fill"
-        }
-    }
-
-    var tone: Color {
-        switch self {
-        case .projects:
-            return Color(red: 0.29, green: 0.53, blue: 0.94)
-        case .monitoring:
-            return Color(red: 0.08, green: 0.66, blue: 0.47)
-        case .account:
-            return Color(red: 0.87, green: 0.45, blue: 0.24)
-        }
-    }
-}
-
 public struct DeployBarSettingsView: View {
     @ObservedObject var store: DeployBarAppStore
-    @State private var selectedPane: SettingsPane? = .projects
 
     public init(store: DeployBarAppStore) {
         self.store = store
     }
 
     public var body: some View {
-        NavigationSplitView {
-            sidebar
-        } detail: {
-            detail
-        }
-        .frame(minWidth: 760, minHeight: 560)
-        .navigationSplitViewStyle(.balanced)
-    }
+        TabView {
+            ProjectsSettingsPane(store: store)
+                .tabItem { Label("Projects", systemImage: "shippingbox.fill") }
 
-    private var sidebar: some View {
-        List(SettingsPane.allCases, selection: $selectedPane) { pane in
-            SettingsSidebarRow(pane: pane, isSelected: selectedPane == pane)
-                .tag(pane)
+            MonitoringSettingsPane(store: store)
+                .tabItem { Label("Monitoring", systemImage: "waveform.path.ecg") }
+
+            AccountSettingsPane(store: store)
+                .tabItem { Label("Account", systemImage: "person.crop.circle.fill") }
         }
-        .listStyle(.sidebar)
-        .navigationTitle("Settings")
-        .navigationSplitViewColumnWidth(min: 200, ideal: 220)
-        .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 8) {
-                Divider()
-                HStack(spacing: 8) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
+        .frame(width: 520, height: 420)
+        .background(WindowAccessor())
+    }
+}
+
+// MARK: - Projects
+
+private struct ProjectsSettingsPane: View {
+    @ObservedObject var store: DeployBarAppStore
+
+    var body: some View {
+        Form {
+            Section {
+                HStack(spacing: 10) {
+                    Image(systemName: "triangle.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.primary)
+
                     Text("DeployBar")
-                        .font(.system(size: 11, weight: .semibold, design: .default))
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 20, weight: .bold))
                 }
-                .padding(.bottom, 8)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
             }
-            .padding(.horizontal, 10)
-            .background(.ultraThinMaterial)
+
+            Section {
+                ProjectsSelectionSection(
+                    store: store,
+                    persistSelectionChanges: true
+                )
+            }
         }
+        .formStyle(.grouped)
+    }
+}
+
+// MARK: - Monitoring
+
+private struct MonitoringSettingsPane: View {
+    @ObservedObject var store: DeployBarAppStore
+
+    private var currentProfile: PollingProfile {
+        store.settings.pollingProfile
     }
 
-    private var detail: some View {
-        let pane = selectedPane ?? .projects
+    var body: some View {
+        Form {
+            Section {
+                HStack(spacing: 8) {
+                    PollingProfileCard(
+                        icon: "leaf.fill",
+                        title: "Eco",
+                        subtitle: "Save power",
+                        tint: .green,
+                        isSelected: currentProfile == .eco
+                    ) { store.updatePollingProfile(.eco) }
 
-        return ZStack {
-            LinearGradient(
-                colors: [Color.white.opacity(0.04), Color.black.opacity(0.10)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
+                    PollingProfileCard(
+                        icon: "speedometer",
+                        title: "Balanced",
+                        subtitle: "Recommended",
+                        tint: .blue,
+                        isSelected: currentProfile == .balanced
+                    ) { store.updatePollingProfile(.balanced) }
+
+                    PollingProfileCard(
+                        icon: "bolt.fill",
+                        title: "Aggressive",
+                        subtitle: "Real-time",
+                        tint: .orange,
+                        isSelected: currentProfile == .aggressive
+                    ) { store.updatePollingProfile(.aggressive) }
+                }
+                .padding(.vertical, 2)
+            } header: {
+                Text("Polling Profile")
+            } footer: {
+                Text(pollingFooter)
+            }
+
+            Section {
+                Toggle("Notifications", isOn: Binding(
+                    get: { store.settings.notificationsEnabled },
+                    set: { store.updateNotificationsEnabled($0) }
+                ))
+
+                Toggle("Sound Effects", isOn: Binding(
+                    get: { store.settings.soundsEnabled },
+                    set: { store.updateSoundsEnabled($0) }
+                ))
+            } header: {
+                Text("Alerts")
+            } footer: {
+                Text("Get notified when deployments succeed or fail.")
+            }
+
+            Section {
+                Toggle("Launch at Login", isOn: Binding(
+                    get: { store.settings.launchAtLogin },
+                    set: { store.updateLaunchAtLogin($0) }
+                ))
+            } footer: {
+                Text("Automatically start DeployBar when you sign in to your Mac.")
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var pollingFooter: String {
+        switch currentProfile {
+        case .eco: "Power-saving mode with slower idle cadence. Best for battery life."
+        case .balanced: "Adaptive updates with balanced API usage. Recommended for most users."
+        case .aggressive: "Near real-time updates with the highest API usage."
+        }
+    }
+}
+
+// MARK: - Polling Profile Card
+
+private struct PollingProfileCard: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let tint: Color
+    let isSelected: Bool
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(isSelected ? tint : .secondary)
+
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+
+                Text(subtitle)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isSelected ? tint.opacity(0.08) : isHovered ? Color.primary.opacity(0.03) : Color.clear)
             )
-            .ignoresSafeArea()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    SettingsHeader(pane: pane)
-
-                    switch pane {
-                    case .projects:
-                        projectsSection
-                    case .monitoring:
-                        monitoringSection
-                    case .account:
-                        accountAndDataSection
-                    }
-                }
-                .padding(24)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(isSelected ? tint.opacity(0.3) : Color.primary.opacity(0.06), lineWidth: isSelected ? 1.5 : 0.5)
+            )
         }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .accessibilityLabel("\(title) polling profile")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
+}
 
-    private var projectsSection: some View {
-        SettingsCard {
-            VStack(alignment: .leading, spacing: 14) {
-                sectionTitle("Project Source")
+// MARK: - Account
 
-                SettingsInfoRow(
-                    icon: "person.2.fill",
-                    iconTint: SettingsPane.projects.tone,
-                    title: "Scope",
-                    subtitle: "Choose which account/team projects come from"
-                ) {
-                    Picker("Scope", selection: $store.selectedScope) {
-                        Text("Personal").tag(TeamScope.personal)
-                        ForEach(store.teams) { team in
-                            Text(team.name).tag(TeamScope.team(id: team.id, slug: team.slug))
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 200)
-                    .onChange(of: store.selectedScope) { _, _ in
-                        Task { await store.refreshProjectsForScope() }
-                    }
-                }
+private struct AccountSettingsPane: View {
+    @ObservedObject var store: DeployBarAppStore
+    @State private var showSignOutConfirmation = false
 
-                Divider()
-
-                HStack {
-                    Label("Watched Projects", systemImage: "shippingbox")
-                        .font(.system(size: 13, weight: .semibold, design: .default))
-
-                    Spacer()
-
-                    Text("\(store.selectedProjectIDs.count)/20")
-                        .font(.system(size: 11, weight: .semibold, design: .default).monospacedDigit())
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(SettingsPane.projects.tone.opacity(0.14))
-                        .foregroundStyle(SettingsPane.projects.tone)
-                        .clipShape(Capsule(style: .continuous))
-                }
-
-                if store.availableProjects.isEmpty {
-                    HStack(spacing: 8) {
-                        Image(systemName: "tray.fill")
+    var body: some View {
+        Form {
+            if let user = store.authUser {
+                Section {
+                    HStack(spacing: 12) {
+                        Image(systemName: "person.crop.circle.fill")
+                            .font(.system(size: 36))
+                            .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(.secondary)
-                        Text("No projects found for this scope.")
-                            .font(.system(size: 12, weight: .regular, design: .default))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 6)
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 4) {
-                            ForEach(store.availableProjects) { project in
-                                ProjectSelectionRow(
-                                    name: project.name,
-                                    isSelected: store.selectedProjectIDs.contains(project.id)
-                                ) {
-                                    store.toggleProjectSelection(project.id)
-                                    store.updateWatchedProjects()
-                                }
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("@\(user.username)")
+                                .font(.headline)
+                            if let email = user.email {
+                                Text(email)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
                             }
                         }
-                        .padding(4)
                     }
-                    .frame(maxHeight: 330)
-                    .background(Color.primary.opacity(0.03))
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(.quaternary, lineWidth: 0.5)
-                    )
+                    .padding(.vertical, 4)
+                }
+            }
+
+            Section {
+                Button("Clear Local Cache") {
+                    store.clearLocalData()
+                }
+            } footer: {
+                Text("Removes stored deployment logs and resets local state.")
+            }
+
+            Section {
+                Button("Sign Out", role: .destructive) {
+                    showSignOutConfirmation = true
+                }
+                .alert("Sign Out of DeployBar?", isPresented: $showSignOutConfirmation) {
+                    Button("Cancel", role: .cancel) {}
+                    Button("Sign Out", role: .destructive) {
+                        store.signOut()
+                    }
+                } message: {
+                    Text("This will remove your API token and all local data. You'll need to re-enter your token to use DeployBar again.")
                 }
             }
         }
-    }
-
-    private var monitoringSection: some View {
-        SettingsCard {
-            VStack(alignment: .leading, spacing: 14) {
-                sectionTitle("Monitoring")
-
-                SettingsInfoRow(
-                    icon: "timer",
-                    iconTint: SettingsPane.monitoring.tone,
-                    title: "Polling Profile",
-                    subtitle: pollingSubtitle
-                ) {
-                    Picker("Profile", selection: Binding(
-                        get: { store.settings.pollingProfile },
-                        set: { store.updatePollingProfile($0) }
-                    )) {
-                        Text("Balanced").tag(PollingProfile.balanced)
-                        Text("Aggressive").tag(PollingProfile.aggressive)
-                        Text("Eco").tag(PollingProfile.eco)
-                    }
-                    .labelsHidden()
-                    .frame(width: 170)
-                }
-
-                Divider()
-
-                SettingsToggleRow(
-                    title: "Notifications",
-                    subtitle: "Show local notifications on success/failure",
-                    icon: "bell.fill",
-                    isOn: Binding(
-                        get: { store.settings.notificationsEnabled },
-                        set: { store.updateNotificationsEnabled($0) }
-                    )
-                )
-
-                Divider()
-
-                SettingsToggleRow(
-                    title: "Sound effects",
-                    subtitle: "Play feedback sounds on status transitions",
-                    icon: "speaker.wave.2.fill",
-                    isOn: Binding(
-                        get: { store.settings.soundsEnabled },
-                        set: { store.updateSoundsEnabled($0) }
-                    )
-                )
-
-                Divider()
-
-                SettingsToggleRow(
-                    title: "Launch at login",
-                    subtitle: "Start DeployBar when you sign in",
-                    icon: "power",
-                    isOn: Binding(
-                        get: { store.settings.launchAtLogin },
-                        set: { store.updateLaunchAtLogin($0) }
-                    )
-                )
-            }
-        }
-    }
-
-    private var accountAndDataSection: some View {
-        SettingsCard {
-            VStack(alignment: .leading, spacing: 14) {
-                sectionTitle("Account & Data")
-
-                SettingsActionRow(
-                    icon: "trash.fill",
-                    iconTint: Color(red: 0.90, green: 0.55, blue: 0.20),
-                    title: "Clear local cache",
-                    subtitle: "Remove stored deployment logs and reset local state",
-                    buttonTitle: "Clear",
-                    role: nil,
-                    action: { store.clearLocalData() }
-                )
-
-                Divider()
-
-                SettingsActionRow(
-                    icon: "rectangle.portrait.and.arrow.right.fill",
-                    iconTint: Color(red: 0.87, green: 0.34, blue: 0.29),
-                    title: "Sign out",
-                    subtitle: "Remove token and local data, then return to onboarding",
-                    buttonTitle: "Sign Out",
-                    role: .destructive,
-                    action: { store.signOut() }
-                )
-            }
-        }
-    }
-
-    private func sectionTitle(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 15, weight: .bold, design: .default))
-    }
-
-    private var pollingSubtitle: String {
-        switch store.settings.pollingProfile {
-        case .balanced:
-            "Fast adaptive updates with balanced API usage"
-        case .aggressive:
-            "Near real-time updates with highest API usage"
-        case .eco:
-            "Power-saving mode with slower idle cadence"
-        }
+        .formStyle(.grouped)
     }
 }
 
-private struct SettingsSidebarRow: View {
-    let pane: SettingsPane
-    let isSelected: Bool
+// MARK: - Window Accessor
 
-    var body: some View {
-        HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(pane.tone.opacity(isSelected ? 0.24 : 0.14))
-                    .frame(width: 24, height: 24)
-                Image(systemName: pane.symbolName)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(pane.tone)
-            }
-
-            Text(pane.title)
-                .font(.system(size: 13, weight: isSelected ? .semibold : .regular, design: .default))
-        }
-        .padding(.vertical, 3)
-    }
-}
-
-private struct SettingsHeader: View {
-    let pane: SettingsPane
-
-    var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(pane.tone.opacity(0.16))
-                    .frame(width: 40, height: 40)
-                Image(systemName: pane.symbolName)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(pane.tone)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(pane.title)
-                    .font(.system(size: 24, weight: .bold, design: .default))
-                Text(pane.subtitle)
-                    .font(.system(size: 12, weight: .regular, design: .default))
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-        }
-    }
-}
-
-private struct SettingsCard<Content: View>: View {
-    let content: Content
-
-    init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
-
-    var body: some View {
-        content
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.primary.opacity(0.06))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-            )
-    }
-}
-
-private struct SettingsInfoRow<Trailing: View>: View {
-    let icon: String
-    let iconTint: Color
-    let title: String
-    let subtitle: String
-    let trailing: Trailing
-
-    init(icon: String, iconTint: Color, title: String, subtitle: String, @ViewBuilder trailing: () -> Trailing) {
-        self.icon = icon
-        self.iconTint = iconTint
-        self.title = title
-        self.subtitle = subtitle
-        self.trailing = trailing()
-    }
-
-    var body: some View {
-        HStack(spacing: 10) {
-            iconBadge
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold, design: .default))
-                Text(subtitle)
-                    .font(.system(size: 11, weight: .regular, design: .default))
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 16)
-            trailing
-        }
-    }
-
-    private var iconBadge: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(iconTint.opacity(0.15))
-                .frame(width: 24, height: 24)
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(iconTint)
-        }
-    }
-}
-
-private struct SettingsActionRow: View {
-    let icon: String
-    let iconTint: Color
-    let title: String
-    let subtitle: String
-    let buttonTitle: String
-    let role: ButtonRole?
-    let action: () -> Void
-
-    var body: some View {
-        HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(iconTint.opacity(0.15))
-                    .frame(width: 24, height: 24)
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(iconTint)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold, design: .default))
-                Text(subtitle)
-                    .font(.system(size: 11, weight: .regular, design: .default))
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 16)
-
-            Button(role: role, action: action) {
-                Text(buttonTitle)
-            }
-            .controlSize(.small)
+private struct WindowAccessor: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            nsView.window?.titlebarSeparatorStyle = .none
         }
     }
 }
