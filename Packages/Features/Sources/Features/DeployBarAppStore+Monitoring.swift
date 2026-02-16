@@ -73,11 +73,13 @@ extension DeployBarAppStore {
         }
 
         monitorTask = Task { [weak self] in
-            guard let self else { return }
-
-            var nextDelay: TimeInterval = immediate ? 0 : self.settings.pollingProfile.activeInterval
+            var nextDelay: TimeInterval = immediate ? 0 : self?.settings.pollingProfile.activeInterval ?? 0
 
             while !Task.isCancelled {
+                guard let self else {
+                    break
+                }
+
                 if nextDelay > 0 {
                     let nanos = UInt64(nextDelay * 1_000_000_000)
                     try? await Task.sleep(nanoseconds: nanos)

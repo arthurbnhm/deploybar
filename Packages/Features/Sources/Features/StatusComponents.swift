@@ -18,7 +18,7 @@ struct ErrorInlineBanner: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(Color.orange.opacity(0.09))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(.rect(cornerRadius: 8))
     }
 }
 

@@ -156,7 +156,7 @@ export default function HomePage() {
           DEPLOYBAR
         </div>
         <p className="mt-4 text-sm text-[#1A1A1A]/40">
-          Free and open source &middot; macOS 14+
+          Free and open source &middot; macOS 15+
         </p>
       </footer>
     </div>

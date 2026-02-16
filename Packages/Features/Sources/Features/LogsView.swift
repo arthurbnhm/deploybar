@@ -3,7 +3,7 @@ import Core
 import SwiftUI
 
 public struct LogsView: View {
-    @ObservedObject var store: DeployBarAppStore
+    let store: DeployBarAppStore
     @Environment(\.dismissWindow) private var dismissWindow
 
     public init(store: DeployBarAppStore) {
@@ -136,10 +136,12 @@ public struct LogsView: View {
         } else {
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(store.logEvents.enumerated()), id: \.element.id) { index, event in
+                    let lastEventID = store.logEvents.last?.id
+
+                    ForEach(store.logEvents) { event in
                         LogRow(event: event)
 
-                        if index < store.logEvents.count - 1 {
+                        if event.id != lastEventID {
                             SubtleDivider()
                                 .padding(.vertical, 2)
                         }

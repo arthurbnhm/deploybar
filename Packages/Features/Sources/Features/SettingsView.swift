@@ -2,7 +2,7 @@ import Core
 import SwiftUI
 
 public struct DeployBarSettingsView: View {
-    @ObservedObject var store: DeployBarAppStore
+    let store: DeployBarAppStore
 
     public init(store: DeployBarAppStore) {
         self.store = store
@@ -10,11 +10,13 @@ public struct DeployBarSettingsView: View {
 
     public var body: some View {
         TabView {
-            ProjectsSettingsPane(store: store)
-                .tabItem { Label("Projects", systemImage: "shippingbox.fill") }
+            Tab("Projects", systemImage: "shippingbox.fill") {
+                ProjectsSettingsPane(store: store)
+            }
 
-            MonitoringSettingsPane(store: store)
-                .tabItem { Label("Monitoring", systemImage: "waveform.path.ecg") }
+            Tab("Monitoring", systemImage: "waveform.path.ecg") {
+                MonitoringSettingsPane(store: store)
+            }
         }
         .frame(width: 520, height: 420)
         .background(WindowAccessor())
@@ -24,7 +26,7 @@ public struct DeployBarSettingsView: View {
 // MARK: - Projects
 
 private struct ProjectsSettingsPane: View {
-    @ObservedObject var store: DeployBarAppStore
+    let store: DeployBarAppStore
 
     var body: some View {
         Form {
@@ -58,7 +60,7 @@ private struct ProjectsSettingsPane: View {
 }
 
 private struct TokenConnectionSection: View {
-    @ObservedObject var store: DeployBarAppStore
+    let store: DeployBarAppStore
     @State private var tokenDraft = ""
     @State private var isEditingToken = false
     @FocusState private var tokenFieldFocused: Bool
@@ -199,7 +201,7 @@ private struct TokenConnectionSection: View {
 // MARK: - Monitoring
 
 private struct MonitoringSettingsPane: View {
-    @ObservedObject var store: DeployBarAppStore
+    let store: DeployBarAppStore
 
     private var currentProfile: PollingProfile {
         store.settings.pollingProfile

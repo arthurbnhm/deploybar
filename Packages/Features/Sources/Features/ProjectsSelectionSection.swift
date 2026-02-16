@@ -1,8 +1,9 @@
 import Core
+import Observation
 import SwiftUI
 
 struct ProjectsSelectionSection: View {
-    @ObservedObject var store: DeployBarAppStore
+    @Bindable var store: DeployBarAppStore
     let persistSelectionChanges: Bool
 
     @State private var showProjectPicker = false
@@ -16,29 +17,9 @@ struct ProjectsSelectionSection: View {
         self.persistSelectionChanges = persistSelectionChanges
     }
 
-    private var watchedProjects: [Project] {
-        store.availableProjects
-            .filter { store.selectedProjectIDs.contains($0.id) }
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-    }
-
-    private var unwatchedProjects: [Project] {
-        store.availableProjects
-            .filter { !store.selectedProjectIDs.contains($0.id) }
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-    }
-
-    private var filteredUnwatchedProjects: [Project] {
-        if projectSearchText.isEmpty {
-            return unwatchedProjects
-        }
-
-        return unwatchedProjects.filter {
-            $0.name.localizedCaseInsensitiveContains(projectSearchText)
-        }
-    }
-
     var body: some View {
+        let buckets = projectBuckets()
+
         Group {
             if store.authUser == nil {
                 VStack(alignment: .leading, spacing: 8) {
@@ -88,9 +69,9 @@ struct ProjectsSelectionSection: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        if !watchedProjects.isEmpty {
+                        if !buckets.watched.isEmpty {
                             FlowLayout(spacing: 6) {
-                                ForEach(watchedProjects) { project in
+                                ForEach(buckets.watched) { project in
                                     ProjectChip(name: project.name) {
                                         toggleProject(project.id)
                                     }
@@ -99,7 +80,7 @@ struct ProjectsSelectionSection: View {
                             .animation(.snappy(duration: 0.25), value: store.selectedProjectIDs)
                         }
 
-                        if !unwatchedProjects.isEmpty {
+                        if !buckets.unwatched.isEmpty {
                             Button {
                                 projectSearchText = ""
                                 showProjectPicker.toggle()
@@ -113,7 +94,7 @@ struct ProjectsSelectionSection: View {
                             }
                         }
 
-                        if watchedProjects.isEmpty {
+                        if buckets.watched.isEmpty {
                             if store.availableProjects.isEmpty {
                                 Label("No projects found for this scope.", systemImage: "tray")
                                     .font(.system(size: 12))
@@ -137,7 +118,9 @@ struct ProjectsSelectionSection: View {
     }
 
     private var projectPickerPopover: some View {
-        VStack(spacing: 0) {
+        let filteredProjects = projectBuckets().filteredUnwatched
+
+        return VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 12))
@@ -152,7 +135,7 @@ struct ProjectsSelectionSection: View {
 
             Divider()
 
-            if filteredUnwatchedProjects.isEmpty {
+            if filteredProjects.isEmpty {
                 Text(projectSearchText.isEmpty ? "All projects are watched." : "No matching projects.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
@@ -160,7 +143,7 @@ struct ProjectsSelectionSection: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 2) {
-                        ForEach(filteredUnwatchedProjects) { project in
+                        ForEach(filteredProjects) { project in
                             Button {
                                 toggleProject(project.id)
                             } label: {
@@ -198,6 +181,46 @@ struct ProjectsSelectionSection: View {
             }
         }
     }
+
+    private func projectBuckets() -> ProjectBuckets {
+        let sortedProjects = store.availableProjects.sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+
+        var watched: [Project] = []
+        var unwatched: [Project] = []
+        watched.reserveCapacity(sortedProjects.count)
+        unwatched.reserveCapacity(sortedProjects.count)
+
+        for project in sortedProjects {
+            if store.selectedProjectIDs.contains(project.id) {
+                watched.append(project)
+            } else {
+                unwatched.append(project)
+            }
+        }
+
+        let filteredUnwatched: [Project]
+        if projectSearchText.isEmpty {
+            filteredUnwatched = unwatched
+        } else {
+            filteredUnwatched = unwatched.filter {
+                $0.name.localizedStandardContains(projectSearchText)
+            }
+        }
+
+        return ProjectBuckets(
+            watched: watched,
+            unwatched: unwatched,
+            filteredUnwatched: filteredUnwatched
+        )
+    }
+}
+
+private struct ProjectBuckets {
+    let watched: [Project]
+    let unwatched: [Project]
+    let filteredUnwatched: [Project]
 }
 
 struct ProjectChip: View {

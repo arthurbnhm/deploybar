@@ -1,5 +1,6 @@
 import Core
 import Foundation
+import Observation
 import SwiftUI
 
 public enum AppPhase: Equatable {
@@ -10,40 +11,41 @@ public enum AppPhase: Equatable {
 }
 
 @MainActor
-public final class DeployBarAppStore: ObservableObject {
+@Observable
+public final class DeployBarAppStore {
     static let testNotificationTitle = "DeployBar Notifications Enabled"
     static let testNotificationBodyPrefix = "You will now receive deployment status updates."
     static let tokenHelpURL = URL(string: "https://vercel.com/account/settings/tokens")!
 
-    @Published public internal(set) var phase: AppPhase = .loading
-    @Published public internal(set) var authUser: AuthUser?
-    @Published public var tokenError: String?
-    @Published public var tokenNotice: String?
-    @Published public var isValidatingToken: Bool = false
+    public internal(set) var phase: AppPhase = .loading
+    public internal(set) var authUser: AuthUser?
+    public var tokenError: String?
+    public var tokenNotice: String?
+    public var isValidatingToken: Bool = false
 
-    @Published public internal(set) var teams: [Team] = []
-    @Published public var selectedScope: TeamScope = .personal
-    @Published public internal(set) var availableProjects: [Project] = []
-    @Published public var selectedProjectIDs: Set<String> = []
+    public internal(set) var teams: [Team] = []
+    public var selectedScope: TeamScope = .personal
+    public internal(set) var availableProjects: [Project] = []
+    public var selectedProjectIDs: Set<String> = []
 
-    @Published public internal(set) var settings: AppSettings = AppSettings()
-    @Published public internal(set) var projectStatuses: [ProjectStatus] = []
-    @Published public internal(set) var aggregateStatus: AggregateStatus = .unknown
-    @Published public internal(set) var monitorCadence: PollingCadence = .idle
-    @Published public internal(set) var monitorError: String?
-    @Published public internal(set) var lastRefreshAt: Date?
-    @Published public internal(set) var isInitialRefreshInFlight: Bool = false
-    @Published public internal(set) var hasCompletedInitialRefresh: Bool = false
-    @Published public internal(set) var isShowingCachedStatuses: Bool = false
-    @Published public internal(set) var cachedStatusAge: TimeInterval?
+    public internal(set) var settings: AppSettings = AppSettings()
+    public internal(set) var projectStatuses: [ProjectStatus] = []
+    public internal(set) var aggregateStatus: AggregateStatus = .unknown
+    public internal(set) var monitorCadence: PollingCadence = .idle
+    public internal(set) var monitorError: String?
+    public internal(set) var lastRefreshAt: Date?
+    public internal(set) var isInitialRefreshInFlight: Bool = false
+    public internal(set) var hasCompletedInitialRefresh: Bool = false
+    public internal(set) var isShowingCachedStatuses: Bool = false
+    public internal(set) var cachedStatusAge: TimeInterval?
 
-    @Published public internal(set) var showingLogs: Bool = false
-    @Published public internal(set) var selectedLogsProject: WatchedProject?
-    @Published public internal(set) var selectedLogsDeployment: DeploymentSnapshot?
-    @Published public internal(set) var logEvents: [DeploymentEvent] = []
-    @Published public internal(set) var isLoadingLogs: Bool = false
+    public internal(set) var showingLogs: Bool = false
+    public internal(set) var selectedLogsProject: WatchedProject?
+    public internal(set) var selectedLogsDeployment: DeploymentSnapshot?
+    public internal(set) var logEvents: [DeploymentEvent] = []
+    public internal(set) var isLoadingLogs: Bool = false
 
-    @Published public internal(set) var menuIsOpen: Bool = false
+    public internal(set) var menuIsOpen: Bool = false
 
     let env: DeployBarEnvironment
     var monitorTask: Task<Void, Never>?
@@ -51,10 +53,6 @@ public final class DeployBarAppStore: ObservableObject {
 
     public init(environment: DeployBarEnvironment) {
         self.env = environment
-    }
-
-    deinit {
-        monitorTask?.cancel()
     }
 
     public func start() {

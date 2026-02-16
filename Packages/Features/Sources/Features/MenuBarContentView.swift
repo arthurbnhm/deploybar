@@ -3,7 +3,7 @@ import Core
 import SwiftUI
 
 public struct MenuBarContentView: View {
-    @ObservedObject var store: DeployBarAppStore
+    let store: DeployBarAppStore
     @Environment(\.openWindow) private var openWindow
     @State private var expandedReadyActionsProjectID: String?
 
@@ -142,6 +142,17 @@ public struct MenuBarContentView: View {
                                     }
                                     .id("\(status.id)-status")
                                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                                }
+                            }
+                            .contextMenu {
+                                if status.snapshot?.stage == .ready {
+                                    Button("View Logs") { openLogs(for: status) }
+                                    Button("Open Online") { openOnline(for: status) }
+                                    if projectDashboardURL(for: status) != nil {
+                                        Button("Open Dashboard") { openDashboard(for: status) }
+                                    }
+                                } else if status.snapshot?.stage == .failed {
+                                    Button("View Logs") { openLogs(for: status) }
                                 }
                             }
                             .animation(.snappy(duration: 0.22), value: expandedReadyActionsProjectID)
@@ -340,14 +351,14 @@ private struct ReadyDeploymentActionsRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Text(projectName)
-                    .font(.system(size: 11, weight: .semibold))
-                    .lineLimit(1)
+            Button(action: onCollapse) {
+                HStack(spacing: 8) {
+                    Text(projectName)
+                        .font(.system(size: 11, weight: .semibold))
+                        .lineLimit(1)
 
-                Spacer(minLength: 6)
+                    Spacer(minLength: 6)
 
-                Button(action: onCollapse) {
                     Image(systemName: "xmark")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(.secondary)
@@ -357,10 +368,10 @@ private struct ReadyDeploymentActionsRow: View {
                                 .fill(DesignSystem.actionButtonFill)
                         )
                 }
-                .buttonStyle(.plain)
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
-            .onTapGesture(perform: onCollapse)
+            .buttonStyle(.plain)
+            .accessibilityLabel("Collapse actions for \(projectName)")
 
             HStack(spacing: 8) {
                 ActionPillButton(
@@ -458,6 +469,7 @@ private struct ProjectStatusRow: View {
             Button(action: onSelect) { row }
                 .buttonStyle(.plain)
                 .onHover { isHovered = $0 }
+                .accessibilityHint("Opens actions for ready deployments or logs for failed deployments.")
         } else {
             row
                 .onHover { isHovered = $0 }
@@ -500,6 +512,7 @@ private struct ActionPillButton: View {
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .onHover { isHovered = $0 }
+        .accessibilityLabel(title)
     }
 
     private var foregroundColor: Color {

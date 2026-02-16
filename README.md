@@ -15,7 +15,7 @@ DeployBar is a native macOS menu bar app for monitoring Vercel production deploy
 
 ## Requirements
 
-- macOS 14+
+- macOS 15+
 - Apple Silicon (`arm64`) target for V1
 - Xcode 16+ / Swift 6+
 

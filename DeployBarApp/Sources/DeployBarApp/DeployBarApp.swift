@@ -51,7 +51,7 @@ final class DeployBarAppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct DeployBarMainApp: App {
     @NSApplicationDelegateAdaptor(DeployBarAppDelegate.self) private var appDelegate
-    @StateObject private var store: DeployBarAppStore
+    @State private var store: DeployBarAppStore
 
     init() {
         let appStore: DeployBarAppStore
@@ -61,7 +61,7 @@ struct DeployBarMainApp: App {
             appStore = DeployBarAppStore(environment: .preview())
         }
         appStore.start()
-        _store = StateObject(wrappedValue: appStore)
+        _store = State(wrappedValue: appStore)
     }
 
     var body: some Scene {
@@ -121,7 +121,7 @@ private struct SettingsWindowBridgeView: View {
 }
 
 private struct SetupRequiredBridgeView: View {
-    @ObservedObject var store: DeployBarAppStore
+    let store: DeployBarAppStore
     @Environment(\.openWindow) private var openWindow
     @State private var didPresentForCurrentNeed = false
 
