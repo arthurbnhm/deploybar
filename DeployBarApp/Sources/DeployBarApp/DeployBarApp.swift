@@ -83,6 +83,12 @@ struct DeployBarMainApp: App {
         }
         .windowResizability(.contentSize)
         .defaultSize(width: 520, height: 490)
+
+        Window("Deployment Logs", id: DeployBarWindow.logs.rawValue) {
+            LogsView(store: store)
+        }
+        .defaultSize(width: 860, height: 560)
+        .defaultPosition(.center)
         .commands {
             SettingsCommands()
         }

@@ -41,14 +41,6 @@ public struct MenuBarContentView: View {
         .frame(width: 420)
         .onAppear { store.setMenuOpen(true) }
         .onDisappear { store.setMenuOpen(false) }
-        .sheet(isPresented: Binding(
-            get: { store.showingLogs },
-            set: { newValue in
-                if !newValue { store.closeLogs() }
-            }
-        )) {
-            LogsView(store: store)
-        }
     }
 
     private var header: some View {
@@ -111,7 +103,7 @@ public struct MenuBarContentView: View {
                 VStack(spacing: 4) {
                     ForEach(store.projectStatuses) { status in
                         ProjectStatusRow(status: status) {
-                            Task { await store.openLogs(for: status) }
+                            handleProjectTap(status)
                         }
                     }
                 }
@@ -182,19 +174,67 @@ public struct MenuBarContentView: View {
             return "idle checks"
         }
     }
+
+    private func handleProjectTap(_ status: ProjectStatus) {
+        guard let snapshot = status.snapshot else {
+            Task { await store.openLogs(for: status) }
+            presentWindow(.logs, openWindow: openWindow)
+            return
+        }
+
+        switch snapshot.stage {
+        case .ready:
+            presentReadyDeploymentActions(for: status)
+        case .failed:
+            Task { await store.openLogs(for: status) }
+            presentWindow(.logs, openWindow: openWindow)
+        default:
+            break
+        }
+    }
+
+    private func presentReadyDeploymentActions(for status: ProjectStatus) {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "Deployment Actions"
+        alert.informativeText = "Choose an action for \(status.project.name)."
+        alert.addButton(withTitle: "View Logs")
+
+        let hasVercelURL = status.snapshot?.url != nil
+        if hasVercelURL {
+            alert.addButton(withTitle: "Open in Vercel")
+        }
+
+        alert.addButton(withTitle: "Cancel")
+
+        NSApp.activate(ignoringOtherApps: true)
+        let response = alert.runModal()
+
+        if response == .alertFirstButtonReturn {
+            Task { await store.openLogs(for: status) }
+            presentWindow(.logs, openWindow: openWindow)
+            return
+        }
+
+        if hasVercelURL,
+           response == .alertSecondButtonReturn,
+           let url = status.snapshot?.url {
+            NSWorkspace.shared.open(url)
+        }
+    }
 }
 
 private struct ProjectStatusRow: View {
     let status: ProjectStatus
-    let onLogs: () -> Void
+    let onSelect: () -> Void
     @State private var isHovered = false
 
     private var stage: DeploymentStage {
         status.snapshot?.stage ?? .unknown
     }
 
-    private var canOpenLogs: Bool {
-        stage == .failed
+    private var canSelect: Bool {
+        stage == .failed || stage == .ready
     }
 
     var body: some View {
@@ -234,8 +274,8 @@ private struct ProjectStatusRow: View {
         )
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-        if canOpenLogs {
-            Button(action: onLogs) { row }
+        if canSelect {
+            Button(action: onSelect) { row }
                 .buttonStyle(.plain)
                 .onHover { isHovered = $0 }
         } else {

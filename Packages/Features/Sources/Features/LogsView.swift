@@ -4,6 +4,7 @@ import SwiftUI
 
 public struct LogsView: View {
     @ObservedObject var store: DeployBarAppStore
+    @Environment(\.dismissWindow) private var dismissWindow
 
     public init(store: DeployBarAppStore) {
         self.store = store
@@ -11,105 +12,164 @@ public struct LogsView: View {
 
     public var body: some View {
         ZStack {
-            GlassBackgroundView(material: .hudWindow)
-                .ignoresSafeArea()
-
             LinearGradient(
-                colors: [Color.white.opacity(0.04), Color.black.opacity(0.10)],
+                colors: [DesignSystem.windowLightTop, DesignSystem.windowLightBottom],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
 
-            NavigationStack {
-                Group {
-                    if store.isLoadingLogs {
-                        VStack(spacing: 12) {
-                            ProgressView().controlSize(.large)
-                            Text("Loading logs…")
-                                .font(.system(size: 13))
-                                .foregroundStyle(.secondary)
-                        }
-                    } else if store.logEvents.isEmpty {
-                        ContentUnavailableView(
-                            "No Logs",
-                            systemImage: "doc.text.magnifyingglass",
-                            description: Text("No log entries found for this deployment.")
-                        )
-                    } else {
-                        logList
-                    }
-                }
-                .navigationTitle(store.selectedLogsProject?.name ?? "Logs")
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Close") { store.closeLogs() }
-                    }
+            RadialGradient(
+                colors: [Color.white.opacity(0.65), Color.clear],
+                center: .topLeading,
+                startRadius: 40,
+                endRadius: 420
+            )
+            .ignoresSafeArea()
 
-                    if let snapshot = store.selectedLogsDeployment {
-                        ToolbarItem(placement: .automatic) {
-                            StatusPill(stage: snapshot.stage)
-                        }
-                    }
+            VStack(spacing: 12) {
+                headerCard
 
-                    if let url = store.selectedLogsDeployment?.url {
-                        ToolbarItem(placement: .primaryAction) {
-                            Link(destination: url) {
-                                Label("Open in Vercel", systemImage: "arrow.up.right.square")
+                AppCard {
+                    Group {
+                        if store.isLoadingLogs {
+                            VStack(spacing: 12) {
+                                ProgressView().controlSize(.large)
+                                Text("Loading logs…")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(.secondary)
                             }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else if store.logEvents.isEmpty {
+                            ContentUnavailableView(
+                                "No Logs",
+                                systemImage: "doc.text.magnifyingglass",
+                                description: Text("No log entries found for this deployment.")
+                            )
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else {
+                            logList
                         }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .scrollContentBackground(.hidden)
-            .background(Color.clear)
+            .padding(16)
         }
         .frame(minWidth: 760, minHeight: 520)
         .background(WindowChromeConfigurator())
     }
 
-    private var logList: some View {
-        List(store.logEvents) { event in
-            HStack(alignment: .top, spacing: 10) {
-                Text(event.createdAt, style: .time)
-                    .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 72, alignment: .trailing)
+    private var headerCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(store.selectedLogsProject?.name ?? "Deployment Logs")
+                            .font(.system(size: 19, weight: .bold))
 
-                Text(event.level.uppercased())
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(levelColor(event.level).opacity(0.15))
-                    .foregroundStyle(levelColor(event.level))
-                    .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
-                    .frame(width: 48)
+                        if let deployment = store.selectedLogsDeployment {
+                            Text("Deployment \(deployment.id)")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        } else {
+                            Text("Recent deployment events")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
 
-                Text(event.message)
-                    .font(.system(size: 12, weight: .regular, design: .monospaced))
-                    .textSelection(.enabled)
-                    .lineLimit(nil)
+                    Spacer()
+
+                    if let snapshot = store.selectedLogsDeployment {
+                        StatusPill(stage: snapshot.stage)
+                    }
+
+                    Button("Close") {
+                        store.closeLogs()
+                        dismissWindow(id: DeployBarWindow.logs.rawValue)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+
+                HStack(spacing: 8) {
+                    if let url = store.selectedLogsDeployment?.url {
+                        Link(destination: url) {
+                            Label("Open in Vercel", systemImage: "arrow.up.right.square")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Text("\(store.logEvents.count) events")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
             }
-            .padding(.vertical, 2)
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
+    }
+
+    private var logList: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(Array(store.logEvents.enumerated()), id: \.element.id) { index, event in
+                    LogRow(event: event)
+
+                    if index < store.logEvents.count - 1 {
+                        SubtleDivider()
+                            .padding(.vertical, 2)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct LogRow: View {
+    let event: DeploymentEvent
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text(event.createdAt, style: .time)
+                .font(.system(size: 11, weight: .regular, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .frame(width: 72, alignment: .trailing)
+
+            Text(event.level.uppercased())
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(levelColor(event.level).opacity(0.16))
+                .foregroundStyle(levelColor(event.level))
+                .clipShape(Capsule(style: .continuous))
+                .frame(width: 62, alignment: .leading)
+
+            Text(event.message)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(.primary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 6)
     }
 
     private func levelColor(_ level: String) -> Color {
         switch level.lowercased() {
         case "error", "fatal", "stderr":
-            .red
+            return .red
         case "warning", "warn":
-            .orange
+            return .orange
         case "info", "stdout":
-            .blue
+            return .blue
         case "debug", "verbose":
-            .purple
+            return .purple
         default:
-            .secondary
+            return .secondary
         }
     }
 }
