@@ -182,12 +182,21 @@ final class AppStoreTests: XCTestCase {
     }
 
     func testLoadTeamsAndProjectsPrunesMissingWatchedProjects() async throws {
+        let staleDate = Date().addingTimeInterval(-3600)
         let store = DeployBarAppStore(environment: .preview())
         store.settings = AppSettings(
             watchedProjects: [
                 WatchedProject(id: "missing_project", name: "Missing", teamId: nil, teamSlug: nil)
             ],
-            selectedScope: .personal
+            selectedScope: .personal,
+            cachedProjectStatuses: [
+                CachedProjectStatus(
+                    project: WatchedProject(id: "missing_project", name: "Missing", teamId: nil, teamSlug: nil),
+                    snapshot: nil,
+                    lastUpdatedAt: staleDate
+                )
+            ],
+            statusCacheUpdatedAt: staleDate
         )
         store.selectedScope = .personal
 
@@ -195,6 +204,64 @@ final class AppStoreTests: XCTestCase {
 
         XCTAssertTrue(store.selectedProjectIDs.isEmpty)
         XCTAssertTrue(store.settings.watchedProjects.isEmpty)
+        XCTAssertTrue(store.settings.cachedProjectStatuses.isEmpty)
+        XCTAssertNil(store.settings.statusCacheUpdatedAt)
+    }
+
+    func testPrepareInitialRefreshPresentationHydratesCachedStatuses() {
+        let staleDate = Date().addingTimeInterval(-500)
+        let watched = WatchedProject(id: "proj_1", name: "Website", teamId: nil, teamSlug: nil)
+        let cachedSnapshot = DeploymentSnapshot(
+            id: "dep_1",
+            projectId: "proj_1",
+            stage: .ready,
+            createdAt: staleDate,
+            url: URL(string: "https://example.vercel.app"),
+            commitMessage: "Cached deploy"
+        )
+
+        let store = DeployBarAppStore(environment: .preview())
+        store.settings = AppSettings(
+            watchedProjects: [watched],
+            selectedScope: .personal,
+            cachedProjectStatuses: [
+                CachedProjectStatus(project: watched, snapshot: cachedSnapshot, lastUpdatedAt: staleDate)
+            ],
+            statusCacheUpdatedAt: staleDate
+        )
+
+        store.prepareInitialRefreshPresentation()
+
+        XCTAssertEqual(store.projectStatuses.count, 1)
+        XCTAssertEqual(store.projectStatuses.first?.project.id, watched.id)
+        XCTAssertTrue(store.isInitialRefreshInFlight)
+        XCTAssertFalse(store.hasCompletedInitialRefresh)
+        XCTAssertTrue(store.isShowingCachedStatuses)
+        XCTAssertTrue(store.isCachedStatusStale)
+        XCTAssertEqual(store.aggregateStatus, .healthy)
+    }
+
+    func testPersistStatusCacheStoresStatusesAndTimestamp() {
+        let refreshedAt = Date()
+        let watched = WatchedProject(id: "proj_1", name: "Website", teamId: nil, teamSlug: nil)
+        let snapshot = DeploymentSnapshot(
+            id: "dep_1",
+            projectId: watched.id,
+            stage: .ready,
+            createdAt: refreshedAt,
+            url: URL(string: "https://example.vercel.app"),
+            commitMessage: "Live deploy"
+        )
+        let statuses = [
+            ProjectStatus(project: watched, snapshot: snapshot, lastUpdatedAt: refreshedAt)
+        ]
+
+        let store = DeployBarAppStore(environment: .preview())
+        store.persistStatusCache(from: statuses, refreshedAt: refreshedAt)
+
+        XCTAssertEqual(store.settings.cachedProjectStatuses.count, 1)
+        XCTAssertEqual(store.settings.cachedProjectStatuses.first?.project.id, watched.id)
+        XCTAssertEqual(store.settings.statusCacheUpdatedAt, refreshedAt)
     }
 
     private func makeStore(

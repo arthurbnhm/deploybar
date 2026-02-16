@@ -65,6 +65,10 @@ extension DeployBarAppStore {
             aggregateStatus = .unknown
             monitorCadence = .idle
             lastRefreshAt = nil
+            isInitialRefreshInFlight = false
+            hasCompletedInitialRefresh = false
+            isShowingCachedStatuses = false
+            cachedStatusAge = nil
             return
         }
 
@@ -104,26 +108,16 @@ extension DeployBarAppStore {
                 return settings.pollingProfile.idleInterval
             }
 
-            projectStatuses = update.statuses.sorted { lhs, rhs in
-                switch (lhs.snapshot?.createdAt, rhs.snapshot?.createdAt) {
-                case let (leftDate?, rightDate?):
-                    if leftDate != rightDate {
-                        return leftDate > rightDate
-                    }
-                case (_?, nil):
-                    return true
-                case (nil, _?):
-                    return false
-                case (nil, nil):
-                    break
-                }
-
-                return lhs.project.name.localizedCaseInsensitiveCompare(rhs.project.name) == .orderedAscending
-            }
+            projectStatuses = sortedProjectStatuses(update.statuses)
             aggregateStatus = update.aggregateStatus
             monitorCadence = update.cadence
             monitorError = nil
             lastRefreshAt = Date()
+            isInitialRefreshInFlight = false
+            hasCompletedInitialRefresh = true
+            isShowingCachedStatuses = false
+            cachedStatusAge = 0
+            persistStatusCache(from: projectStatuses, refreshedAt: lastRefreshAt ?? Date())
 
             try await env.eventStore.purge(olderThan: Date().addingTimeInterval(-7 * 24 * 60 * 60))
             await handleTransitions(update.transitions)
@@ -171,5 +165,31 @@ extension DeployBarAppStore {
             notificationRouter: env.notificationRouter,
             soundPlayer: env.soundPlayer
         )
+    }
+
+    func persistStatusCache(from statuses: [ProjectStatus], refreshedAt: Date) {
+        let cachedStatuses = statuses.map { status in
+            CachedProjectStatus(
+                project: status.project,
+                snapshot: status.snapshot,
+                lastUpdatedAt: status.lastUpdatedAt
+            )
+        }
+
+        let shouldWriteStatuses = cachedStatuses != settings.cachedProjectStatuses
+        let shouldWriteTimestamp: Bool
+        if let previous = settings.statusCacheUpdatedAt {
+            shouldWriteTimestamp = refreshedAt.timeIntervalSince(previous) >= 60
+        } else {
+            shouldWriteTimestamp = true
+        }
+
+        guard shouldWriteStatuses || shouldWriteTimestamp else {
+            return
+        }
+
+        settings.cachedProjectStatuses = cachedStatuses
+        settings.statusCacheUpdatedAt = refreshedAt
+        persistSettings()
     }
 }

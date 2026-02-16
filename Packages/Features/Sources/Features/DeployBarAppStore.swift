@@ -32,6 +32,10 @@ public final class DeployBarAppStore: ObservableObject {
     @Published public internal(set) var monitorCadence: PollingCadence = .idle
     @Published public internal(set) var monitorError: String?
     @Published public internal(set) var lastRefreshAt: Date?
+    @Published public internal(set) var isInitialRefreshInFlight: Bool = false
+    @Published public internal(set) var hasCompletedInitialRefresh: Bool = false
+    @Published public internal(set) var isShowingCachedStatuses: Bool = false
+    @Published public internal(set) var cachedStatusAge: TimeInterval?
 
     @Published public internal(set) var showingLogs: Bool = false
     @Published public internal(set) var selectedLogsProject: WatchedProject?
@@ -69,7 +73,18 @@ public final class DeployBarAppStore: ObservableObject {
         !settings.watchedProjects.isEmpty
     }
 
+    public var hasConfiguredProjects: Bool {
+        hasWatchedProjects
+    }
+
     public var requiresSetup: Bool {
         phase == .setupRequired
+    }
+
+    public var isCachedStatusStale: Bool {
+        guard let cachedStatusAge else {
+            return false
+        }
+        return cachedStatusAge > 120
     }
 }

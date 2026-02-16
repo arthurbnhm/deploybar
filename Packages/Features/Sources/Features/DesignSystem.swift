@@ -36,27 +36,6 @@ enum DesignSystem {
         dark: NSColor.white.withAlphaComponent(0.17)
     )
 
-    static let windowBackgroundTop = dynamic(
-        light: NSColor(red: 0.96, green: 0.96, blue: 0.96, alpha: 1),
-        dark: NSColor(red: 0.13, green: 0.14, blue: 0.16, alpha: 1)
-    )
-    static let windowBackgroundBottom = dynamic(
-        light: NSColor(red: 0.91, green: 0.91, blue: 0.91, alpha: 1),
-        dark: NSColor(red: 0.09, green: 0.10, blue: 0.12, alpha: 1)
-    )
-    static let windowGlow = dynamic(
-        light: NSColor.white.withAlphaComponent(0.72),
-        dark: NSColor.white.withAlphaComponent(0.16)
-    )
-    static let windowOverlayTop = dynamic(
-        light: NSColor.white.withAlphaComponent(0.06),
-        dark: NSColor.white.withAlphaComponent(0.03)
-    )
-    static let windowOverlayBottom = dynamic(
-        light: NSColor.black.withAlphaComponent(0.10),
-        dark: NSColor.black.withAlphaComponent(0.28)
-    )
-
     static let stepProgressTrack = dynamic(
         light: NSColor.black.withAlphaComponent(0.08),
         dark: NSColor.white.withAlphaComponent(0.14)

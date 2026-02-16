@@ -54,6 +54,7 @@ extension DeployBarAppStore {
             tokenError = nil
 
             if !settings.watchedProjects.isEmpty {
+                prepareInitialRefreshPresentation()
                 phase = .running
                 startMonitoringLoop(immediate: true)
             } else {
@@ -68,6 +69,7 @@ extension DeployBarAppStore {
             return
         }
 
+        prepareInitialRefreshPresentation()
         phase = .running
         startMonitoringLoop(immediate: true)
     }
@@ -80,6 +82,78 @@ extension DeployBarAppStore {
         aggregateStatus = .unknown
         monitorCadence = .idle
         lastRefreshAt = nil
+        isInitialRefreshInFlight = false
+        hasCompletedInitialRefresh = false
+        isShowingCachedStatuses = false
+        cachedStatusAge = nil
+    }
+
+    func prepareInitialRefreshPresentation() {
+        isInitialRefreshInFlight = true
+        hasCompletedInitialRefresh = false
+
+        let watchedProjectIDs = Set(settings.watchedProjects.map(\.id))
+        let hydratedStatuses = settings.cachedProjectStatuses
+            .filter { watchedProjectIDs.contains($0.project.id) }
+            .map { cached in
+                ProjectStatus(
+                    project: cached.project,
+                    snapshot: cached.snapshot,
+                    lastUpdatedAt: cached.lastUpdatedAt
+                )
+            }
+
+        projectStatuses = sortedProjectStatuses(hydratedStatuses)
+        aggregateStatus = aggregateStatus(for: projectStatuses)
+        isShowingCachedStatuses = !projectStatuses.isEmpty
+
+        if let cachedAt = settings.statusCacheUpdatedAt {
+            cachedStatusAge = max(0, Date().timeIntervalSince(cachedAt))
+        } else {
+            cachedStatusAge = nil
+        }
+    }
+
+    func sortedProjectStatuses(_ statuses: [ProjectStatus]) -> [ProjectStatus] {
+        statuses.sorted { lhs, rhs in
+            switch (lhs.snapshot?.createdAt, rhs.snapshot?.createdAt) {
+            case let (leftDate?, rightDate?):
+                if leftDate != rightDate {
+                    return leftDate > rightDate
+                }
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            case (nil, nil):
+                break
+            }
+
+            return lhs.project.name.localizedCaseInsensitiveCompare(rhs.project.name) == .orderedAscending
+        }
+    }
+
+    func aggregateStatus(for statuses: [ProjectStatus]) -> AggregateStatus {
+        guard !statuses.isEmpty else {
+            return .unknown
+        }
+
+        if statuses.contains(where: { $0.snapshot?.stage == .failed }) {
+            return .failed
+        }
+
+        if statuses.contains(where: { stage in
+            let snapshotStage = stage.snapshot?.stage
+            return snapshotStage == .building || snapshotStage == .queued
+        }) {
+            return .building
+        }
+
+        if statuses.allSatisfy({ $0.snapshot?.stage == .ready }) {
+            return .healthy
+        }
+
+        return .unknown
     }
 
     func triggerNotificationTestIfJustEnabled(wasEnabled: Bool, isEnabled: Bool) {

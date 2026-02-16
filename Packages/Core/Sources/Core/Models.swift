@@ -205,6 +205,19 @@ public struct ProjectStatus: Sendable, Equatable, Identifiable {
     }
 }
 
+public struct CachedProjectStatus: Codable, Sendable, Equatable, Identifiable {
+    public var id: String { project.id }
+    public let project: WatchedProject
+    public let snapshot: DeploymentSnapshot?
+    public let lastUpdatedAt: Date
+
+    public init(project: WatchedProject, snapshot: DeploymentSnapshot?, lastUpdatedAt: Date) {
+        self.project = project
+        self.snapshot = snapshot
+        self.lastUpdatedAt = lastUpdatedAt
+    }
+}
+
 public struct AppSettings: Codable, Sendable, Equatable {
     public var pollingProfile: PollingProfile
     public var notificationsEnabled: Bool
@@ -212,6 +225,19 @@ public struct AppSettings: Codable, Sendable, Equatable {
     public var launchAtLogin: Bool
     public var watchedProjects: [WatchedProject]
     public var selectedScope: TeamScope
+    public var cachedProjectStatuses: [CachedProjectStatus]
+    public var statusCacheUpdatedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case pollingProfile
+        case notificationsEnabled
+        case soundsEnabled
+        case launchAtLogin
+        case watchedProjects
+        case selectedScope
+        case cachedProjectStatuses
+        case statusCacheUpdatedAt
+    }
 
     public init(
         pollingProfile: PollingProfile = .balanced,
@@ -219,7 +245,9 @@ public struct AppSettings: Codable, Sendable, Equatable {
         soundsEnabled: Bool = true,
         launchAtLogin: Bool = false,
         watchedProjects: [WatchedProject] = [],
-        selectedScope: TeamScope = .personal
+        selectedScope: TeamScope = .personal,
+        cachedProjectStatuses: [CachedProjectStatus] = [],
+        statusCacheUpdatedAt: Date? = nil
     ) {
         self.pollingProfile = pollingProfile
         self.notificationsEnabled = notificationsEnabled
@@ -227,6 +255,32 @@ public struct AppSettings: Codable, Sendable, Equatable {
         self.launchAtLogin = launchAtLogin
         self.watchedProjects = watchedProjects
         self.selectedScope = selectedScope
+        self.cachedProjectStatuses = cachedProjectStatuses
+        self.statusCacheUpdatedAt = statusCacheUpdatedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        pollingProfile = try container.decodeIfPresent(PollingProfile.self, forKey: .pollingProfile) ?? .balanced
+        notificationsEnabled = try container.decodeIfPresent(Bool.self, forKey: .notificationsEnabled) ?? true
+        soundsEnabled = try container.decodeIfPresent(Bool.self, forKey: .soundsEnabled) ?? true
+        launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
+        watchedProjects = try container.decodeIfPresent([WatchedProject].self, forKey: .watchedProjects) ?? []
+        selectedScope = try container.decodeIfPresent(TeamScope.self, forKey: .selectedScope) ?? .personal
+        cachedProjectStatuses = try container.decodeIfPresent([CachedProjectStatus].self, forKey: .cachedProjectStatuses) ?? []
+        statusCacheUpdatedAt = try container.decodeIfPresent(Date.self, forKey: .statusCacheUpdatedAt)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(pollingProfile, forKey: .pollingProfile)
+        try container.encode(notificationsEnabled, forKey: .notificationsEnabled)
+        try container.encode(soundsEnabled, forKey: .soundsEnabled)
+        try container.encode(launchAtLogin, forKey: .launchAtLogin)
+        try container.encode(watchedProjects, forKey: .watchedProjects)
+        try container.encode(selectedScope, forKey: .selectedScope)
+        try container.encode(cachedProjectStatuses, forKey: .cachedProjectStatuses)
+        try container.encodeIfPresent(statusCacheUpdatedAt, forKey: .statusCacheUpdatedAt)
     }
 }
 

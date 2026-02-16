@@ -79,12 +79,14 @@ struct DeployBarMainApp: App {
         }
         .windowResizability(.contentSize)
         .defaultSize(width: 520, height: 490)
+        .deployBarWindowChrome()
 
         Window("Deployment Logs", id: DeployBarWindow.logs.rawValue) {
             LogsView(store: store)
         }
         .defaultSize(width: 860, height: 560)
         .defaultPosition(.center)
+        .deployBarWindowChrome()
         .commands {
             SettingsCommands()
         }
@@ -145,5 +147,11 @@ private struct SetupRequiredBridgeView: View {
 
         didPresentForCurrentNeed = true
         presentWindow(.settings, openWindow: openWindow)
+    }
+}
+
+private extension Scene {
+    func deployBarWindowChrome() -> some Scene {
+        windowToolbarStyle(.unified(showsTitle: false))
     }
 }

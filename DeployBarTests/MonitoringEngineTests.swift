@@ -33,7 +33,7 @@ private actor StubVercelClient: VercelClient {
 }
 
 final class MonitoringEngineTests: XCTestCase {
-    func testTransitionsOnlyFiresOncePerTerminalDeployment() async throws {
+    func testInitialTerminalSnapshotDoesNotEmitTransition() async throws {
         let first = DeploymentSnapshot(
             id: "dep_1",
             projectId: "p1",
@@ -50,9 +50,77 @@ final class MonitoringEngineTests: XCTestCase {
         let firstUpdate = try await engine.refresh(projects: watched, profile: .balanced, menuIsOpen: false)
         let secondUpdate = try await engine.refresh(projects: watched, profile: .balanced, menuIsOpen: false)
 
-        XCTAssertEqual(firstUpdate.transitions.count, 1)
+        XCTAssertEqual(firstUpdate.transitions.count, 0)
         XCTAssertEqual(secondUpdate.transitions.count, 0)
         XCTAssertEqual(firstUpdate.aggregateStatus, .healthy)
+    }
+
+    func testTransitionEmitsWhenProjectMovesFromNonTerminalToTerminal() async throws {
+        let building = DeploymentSnapshot(
+            id: "dep_build",
+            projectId: "p_move",
+            stage: .building,
+            createdAt: Date(),
+            url: nil,
+            commitMessage: nil
+        )
+        let ready = DeploymentSnapshot(
+            id: "dep_ready",
+            projectId: "p_move",
+            stage: .ready,
+            createdAt: Date(),
+            url: nil,
+            commitMessage: nil
+        )
+
+        let client = StubVercelClient(snapshotsByProject: ["p_move": [building, ready]])
+        let engine = MonitoringEngine(client: client)
+        let watched = [WatchedProject(id: "p_move", name: "Project", teamId: nil, teamSlug: nil)]
+
+        let firstUpdate = try await engine.refresh(projects: watched, profile: .balanced, menuIsOpen: false)
+        let secondUpdate = try await engine.refresh(projects: watched, profile: .balanced, menuIsOpen: false)
+
+        XCTAssertEqual(firstUpdate.transitions.count, 0)
+        XCTAssertEqual(secondUpdate.transitions.count, 1)
+    }
+
+    func testNewlyAddedProjectTerminalBaselineDoesNotEmitTransition() async throws {
+        let p1Building = DeploymentSnapshot(
+            id: "dep_p1_build",
+            projectId: "p1",
+            stage: .building,
+            createdAt: Date(),
+            url: nil,
+            commitMessage: nil
+        )
+        let p2Ready = DeploymentSnapshot(
+            id: "dep_p2_ready",
+            projectId: "p2",
+            stage: .ready,
+            createdAt: Date(),
+            url: nil,
+            commitMessage: nil
+        )
+
+        let client = StubVercelClient(
+            snapshotsByProject: [
+                "p1": [p1Building, p1Building],
+                "p2": [p2Ready]
+            ]
+        )
+        let engine = MonitoringEngine(client: client)
+
+        let firstWatched = [WatchedProject(id: "p1", name: "Project 1", teamId: nil, teamSlug: nil)]
+        let secondWatched = [
+            WatchedProject(id: "p1", name: "Project 1", teamId: nil, teamSlug: nil),
+            WatchedProject(id: "p2", name: "Project 2", teamId: nil, teamSlug: nil)
+        ]
+
+        let firstUpdate = try await engine.refresh(projects: firstWatched, profile: .balanced, menuIsOpen: false)
+        let secondUpdate = try await engine.refresh(projects: secondWatched, profile: .balanced, menuIsOpen: false)
+
+        XCTAssertEqual(firstUpdate.transitions.count, 0)
+        XCTAssertEqual(secondUpdate.transitions.count, 0)
     }
 
     func testInProgressUsesBoostInterval() async throws {

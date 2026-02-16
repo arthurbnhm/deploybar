@@ -91,8 +91,10 @@ public actor MonitoringEngine {
 
                 if snapshot.stage.isTerminal {
                     let key = "\(snapshot.id):\(snapshot.stage.rawValue)"
-                    let isNewTerminal = !notifiedTerminalKeys.contains(key)
-                    if isNewTerminal {
+                    if previous == nil {
+                        // First observation for a project is baseline state: do not notify.
+                        notifiedTerminalKeys.insert(key)
+                    } else if !notifiedTerminalKeys.contains(key) {
                         notifiedTerminalKeys.insert(key)
                         transitions.append(
                             DeploymentTransition(project: project, previous: previous, current: snapshot)

@@ -88,7 +88,7 @@ public struct MenuBarContentView: View {
 
     @ViewBuilder
     private var projectList: some View {
-        if store.projectStatuses.isEmpty {
+        if !store.hasConfiguredProjects {
             VStack(spacing: 8) {
                 Image(systemName: "tray")
                     .font(.system(size: 20))
@@ -99,43 +99,90 @@ public struct MenuBarContentView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 24)
-        } else {
-            ScrollView {
-                VStack(spacing: 4) {
-                    ForEach(store.projectStatuses) { status in
-                        let isExpanded = shouldShowInlineActions(for: status)
-
-                        Group {
-                            if isExpanded {
-                                ReadyDeploymentActionsRow(
-                                    projectName: status.project.name,
-                                    onViewLogs: { openLogs(for: status) },
-                                    onOpenOnline: { openOnline(for: status) },
-                                    onOpenDashboard: { openDashboard(for: status) },
-                                    onCollapse: {
-                                        withAnimation(.snappy(duration: 0.18)) {
-                                            expandedReadyActionsProjectID = nil
-                                        }
-                                    },
-                                    canOpenDashboard: projectDashboardURL(for: status) != nil
-                                )
-                                .id("\(status.id)-actions")
-                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                            } else {
-                                ProjectStatusRow(status: status) {
-                                    handleProjectTap(status)
-                                }
-                                .id("\(status.id)-status")
-                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                            }
-                        }
-                        .animation(.snappy(duration: 0.22), value: expandedReadyActionsProjectID)
+        } else if !store.projectStatuses.isEmpty {
+            VStack(spacing: 6) {
+                if let cacheMessage {
+                    HStack(spacing: 6) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Text(cacheMessage)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Spacer()
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.top, 6)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 8)
+
+                ScrollView {
+                    VStack(spacing: 4) {
+                        ForEach(store.projectStatuses) { status in
+                            let isExpanded = shouldShowInlineActions(for: status)
+
+                            Group {
+                                if isExpanded {
+                                    ReadyDeploymentActionsRow(
+                                        projectName: status.project.name,
+                                        onViewLogs: { openLogs(for: status) },
+                                        onOpenOnline: { openOnline(for: status) },
+                                        onOpenDashboard: { openDashboard(for: status) },
+                                        onCollapse: {
+                                            withAnimation(.snappy(duration: 0.18)) {
+                                                expandedReadyActionsProjectID = nil
+                                            }
+                                        },
+                                        canOpenDashboard: projectDashboardURL(for: status) != nil
+                                    )
+                                    .id("\(status.id)-actions")
+                                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                                } else {
+                                    ProjectStatusRow(status: status) {
+                                        handleProjectTap(status)
+                                    }
+                                    .id("\(status.id)-status")
+                                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                                }
+                            }
+                            .animation(.snappy(duration: 0.22), value: expandedReadyActionsProjectID)
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
+                }
+                .frame(maxHeight: 340)
             }
-            .frame(maxHeight: 340)
+        } else if store.isInitialRefreshInFlight {
+            VStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Syncing deployments…")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
+        } else if store.hasCompletedInitialRefresh {
+            VStack(spacing: 8) {
+                Image(systemName: "clock.badge.questionmark")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.tertiary)
+                Text("No deployments yet")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
+        } else {
+            VStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Loading deployments…")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
         }
     }
 
@@ -173,6 +220,15 @@ public struct MenuBarContentView: View {
             return "Waiting for auth"
         }
 
+        if store.isShowingCachedStatuses {
+            let cacheLabel = store.isCachedStatusStale ? "cached (stale)" : "cached"
+            return "@\(user.username) • \(cacheLabel)"
+        }
+
+        if store.isInitialRefreshInFlight, store.hasConfiguredProjects {
+            return "@\(user.username) • syncing"
+        }
+
         guard let lastRefreshAt = store.lastRefreshAt else {
             return "@\(user.username)"
         }
@@ -198,6 +254,18 @@ public struct MenuBarContentView: View {
         case .idle:
             return "idle checks"
         }
+    }
+
+    private var cacheMessage: String? {
+        guard store.isShowingCachedStatuses else {
+            return nil
+        }
+
+        if store.isCachedStatusStale {
+            return "Showing stale cached statuses while refreshing live data."
+        }
+
+        return "Showing cached statuses while refreshing live data."
     }
 
     private func handleProjectTap(_ status: ProjectStatus) {
@@ -291,6 +359,8 @@ private struct ReadyDeploymentActionsRow: View {
                 }
                 .buttonStyle(.plain)
             }
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onCollapse)
 
             HStack(spacing: 8) {
                 ActionPillButton(

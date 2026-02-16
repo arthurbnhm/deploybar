@@ -11,116 +11,81 @@ public struct LogsView: View {
     }
 
     public var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [DesignSystem.windowBackgroundTop, DesignSystem.windowBackgroundBottom],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-
-            RadialGradient(
-                colors: [DesignSystem.windowGlow, Color.clear],
-                center: .topLeading,
-                startRadius: 40,
-                endRadius: 420
-            )
-            .ignoresSafeArea()
-
-            VStack(spacing: 12) {
-                headerCard
-
-                AppCard {
-                    Group {
-                        if store.isLoadingLogs {
-                            VStack(spacing: 12) {
-                                ProgressView().controlSize(.large)
-                                Text("Loading logs…")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        } else if store.logEvents.isEmpty {
-                            ContentUnavailableView(
-                                "No Logs",
-                                systemImage: "doc.text.magnifyingglass",
-                                description: Text("No log entries found for this deployment.")
-                            )
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        } else {
-                            logList
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        Form {
+            Section {
+                headerSection
             }
-            .padding(16)
+
+            Section("Deployment Events") {
+                eventsSection
+            }
         }
+        .formStyle(.grouped)
         .frame(minWidth: 760, minHeight: 520)
-        .background(WindowChromeConfigurator())
+        .background(WindowAccessor())
     }
 
-    private var headerCard: some View {
-        AppCard {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(store.selectedLogsProject?.name ?? "Deployment Logs")
-                            .font(.system(size: 19, weight: .bold))
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(store.selectedLogsProject?.name ?? "Deployment Logs")
+                        .font(.system(size: 24, weight: .bold))
 
-                        if let deployment = store.selectedLogsDeployment {
-                            Text("Deployment \(deployment.id)")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                        } else {
-                            Text("Recent deployment events")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                        }
+                    if let deployment = store.selectedLogsDeployment {
+                        Text("Deployment \(deployment.id)")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    } else {
+                        Text("Recent deployment events")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
                     }
-
-                    Spacer()
-
-                    if let snapshot = store.selectedLogsDeployment {
-                        StatusPill(stage: snapshot.stage)
-                    }
-
-                    Button("Close") {
-                        store.closeLogs()
-                        dismissWindow(id: DeployBarWindow.logs.rawValue)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                 }
 
-                HStack(spacing: 8) {
-                    Button {
-                        openOnline()
-                    } label: {
-                        Label("Open Online", systemImage: "globe")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(store.selectedLogsDeployment?.url == nil)
+                Spacer()
 
-                    Button {
-                        openDashboard()
-                    } label: {
-                        Label("Open Dashboard", systemImage: "rectangle.grid.2x2")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(projectDashboardURL == nil)
-
-                    Text("\(store.logEvents.count) events")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
+                if let snapshot = store.selectedLogsDeployment {
+                    StatusPill(stage: snapshot.stage)
                 }
             }
+
+            HStack(spacing: 10) {
+                Button {
+                    openOnline()
+                } label: {
+                    Label("Open Online", systemImage: "globe")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(store.selectedLogsDeployment?.url == nil)
+
+                Button {
+                    openDashboard()
+                } label: {
+                    Label("Open Dashboard", systemImage: "rectangle.grid.2x2")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(projectDashboardURL == nil)
+
+                Text("\(store.logEvents.count) events")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+
+                Spacer()
+
+                Button("Close") {
+                    store.closeLogs()
+                    dismissWindow(id: DeployBarWindow.logs.rawValue)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
         }
+        .padding(.vertical, 2)
     }
 
     private var projectDashboardURL: URL? {
@@ -148,20 +113,42 @@ public struct LogsView: View {
         NSWorkspace.shared.open(url)
     }
 
-    private var logList: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(Array(store.logEvents.enumerated()), id: \.element.id) { index, event in
-                    LogRow(event: event)
+    @ViewBuilder
+    private var eventsSection: some View {
+        if store.isLoadingLogs {
+            VStack(spacing: 12) {
+                ProgressView()
+                    .controlSize(.regular)
+                Text("Loading logs...")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+        } else if store.logEvents.isEmpty {
+            ContentUnavailableView(
+                "No Logs",
+                systemImage: "doc.text.magnifyingglass",
+                description: Text("No log entries found for this deployment.")
+            )
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(store.logEvents.enumerated()), id: \.element.id) { index, event in
+                        LogRow(event: event)
 
-                    if index < store.logEvents.count - 1 {
-                        SubtleDivider()
-                            .padding(.vertical, 2)
+                        if index < store.logEvents.count - 1 {
+                            SubtleDivider()
+                                .padding(.vertical, 2)
+                        }
                     }
                 }
+                .padding(.vertical, 2)
             }
+            .frame(maxWidth: .infinity, minHeight: 340, maxHeight: 520, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

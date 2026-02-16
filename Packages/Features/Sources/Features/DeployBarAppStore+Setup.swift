@@ -129,6 +129,7 @@ extension DeployBarAppStore {
             teams: teams
         )
         settings.selectedScope = selectedScope
+        _ = pruneCachedStatusesToWatchedProjects()
 
         persistSettings()
         tokenError = nil
@@ -175,10 +176,41 @@ extension DeployBarAppStore {
             teams: teams
         )
 
-        if settings.watchedProjects != normalizedWatchedProjects || settings.selectedScope != selectedScope {
+        let settingsChanged = settings.watchedProjects != normalizedWatchedProjects || settings.selectedScope != selectedScope
+
+        if settingsChanged {
             settings.watchedProjects = normalizedWatchedProjects
             settings.selectedScope = selectedScope
+        }
+
+        let cacheChanged = pruneCachedStatusesToWatchedProjects()
+
+        if settingsChanged || cacheChanged {
             persistSettings()
         }
+    }
+
+    @discardableResult
+    func pruneCachedStatusesToWatchedProjects() -> Bool {
+        let watchedProjectIDs = Set(settings.watchedProjects.map(\.id))
+        let filteredCachedStatuses = settings.cachedProjectStatuses.filter { cached in
+            watchedProjectIDs.contains(cached.project.id)
+        }
+        let didChangeCachedStatuses = filteredCachedStatuses != settings.cachedProjectStatuses
+        settings.cachedProjectStatuses = filteredCachedStatuses
+
+        var didChangeCacheTimestamp = false
+        if settings.cachedProjectStatuses.isEmpty {
+            didChangeCacheTimestamp = settings.statusCacheUpdatedAt != nil
+            settings.statusCacheUpdatedAt = nil
+        }
+
+        let filteredProjectStatuses = projectStatuses.filter { status in
+            watchedProjectIDs.contains(status.project.id)
+        }
+        let didChangeInMemoryStatuses = filteredProjectStatuses != projectStatuses
+        projectStatuses = filteredProjectStatuses
+
+        return didChangeCachedStatuses || didChangeCacheTimestamp || didChangeInMemoryStatuses
     }
 }

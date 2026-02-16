@@ -319,14 +319,3 @@ private struct PollingProfileCard: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
-
-// MARK: - Window Accessor
-
-private struct WindowAccessor: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { NSView() }
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async {
-            nsView.window?.titlebarSeparatorStyle = .none
-        }
-    }
-}
