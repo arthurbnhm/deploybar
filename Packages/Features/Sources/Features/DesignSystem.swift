@@ -15,9 +15,25 @@ enum DesignSystem {
         light: NSColor.black.withAlphaComponent(0.05),
         dark: NSColor.white.withAlphaComponent(0.11)
     )
+    static let rowSelectedFill = dynamic(
+        light: NSColor.black.withAlphaComponent(0.075),
+        dark: NSColor.white.withAlphaComponent(0.16)
+    )
     static let border = dynamic(
         light: NSColor.black.withAlphaComponent(0.08),
         dark: NSColor.white.withAlphaComponent(0.16)
+    )
+    static let actionTrayFill = dynamic(
+        light: NSColor.black.withAlphaComponent(0.03),
+        dark: NSColor.white.withAlphaComponent(0.07)
+    )
+    static let actionButtonFill = dynamic(
+        light: NSColor.black.withAlphaComponent(0.045),
+        dark: NSColor.white.withAlphaComponent(0.10)
+    )
+    static let actionButtonHoverFill = dynamic(
+        light: NSColor.black.withAlphaComponent(0.08),
+        dark: NSColor.white.withAlphaComponent(0.17)
     )
 
     static let windowBackgroundTop = dynamic(

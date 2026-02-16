@@ -103,22 +103,33 @@ public struct MenuBarContentView: View {
             ScrollView {
                 VStack(spacing: 4) {
                     ForEach(store.projectStatuses) { status in
-                        VStack(spacing: 6) {
-                            ProjectStatusRow(status: status) {
-                                handleProjectTap(status)
-                            }
+                        let isExpanded = shouldShowInlineActions(for: status)
 
-                            if shouldShowInlineActions(for: status) {
+                        Group {
+                            if isExpanded {
                                 ReadyDeploymentActionsRow(
+                                    projectName: status.project.name,
                                     onViewLogs: { openLogs(for: status) },
                                     onOpenOnline: { openOnline(for: status) },
                                     onOpenDashboard: { openDashboard(for: status) },
+                                    onCollapse: {
+                                        withAnimation(.snappy(duration: 0.18)) {
+                                            expandedReadyActionsProjectID = nil
+                                        }
+                                    },
                                     canOpenDashboard: projectDashboardURL(for: status) != nil
                                 )
-                                .transition(.move(edge: .top).combined(with: .opacity))
+                                .id("\(status.id)-actions")
+                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                            } else {
+                                ProjectStatusRow(status: status) {
+                                    handleProjectTap(status)
+                                }
+                                .id("\(status.id)-status")
+                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
                             }
                         }
-                        .animation(.snappy(duration: 0.2), value: expandedReadyActionsProjectID)
+                        .animation(.snappy(duration: 0.22), value: expandedReadyActionsProjectID)
                     }
                 }
                 .padding(.horizontal, 8)
@@ -252,42 +263,68 @@ public struct MenuBarContentView: View {
 }
 
 private struct ReadyDeploymentActionsRow: View {
+    let projectName: String
     let onViewLogs: () -> Void
     let onOpenOnline: () -> Void
     let onOpenDashboard: () -> Void
+    let onCollapse: () -> Void
     let canOpenDashboard: Bool
 
     var body: some View {
-        HStack(spacing: 8) {
-            Button {
-                onViewLogs()
-            } label: {
-                Label("View Logs", systemImage: "doc.text.magnifyingglass")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text(projectName)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
 
-            Button {
-                onOpenOnline()
-            } label: {
-                Label("Open Online", systemImage: "globe")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+                Spacer(minLength: 6)
 
-            Button {
-                onOpenDashboard()
-            } label: {
-                Label("Dashboard", systemImage: "rectangle.grid.2x2")
+                Button(action: onCollapse) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 16, height: 16)
+                        .background(
+                            Circle()
+                                .fill(DesignSystem.actionButtonFill)
+                        )
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(!canOpenDashboard)
 
-            Spacer(minLength: 0)
+            HStack(spacing: 8) {
+                ActionPillButton(
+                    title: "Logs",
+                    systemImage: "doc.text.magnifyingglass",
+                    isPrimary: true,
+                    action: onViewLogs
+                )
+
+                ActionPillButton(
+                    title: "Online",
+                    systemImage: "globe",
+                    action: onOpenOnline
+                )
+
+                ActionPillButton(
+                    title: "Dashboard",
+                    systemImage: "rectangle.grid.2x2",
+                    isEnabled: canOpenDashboard,
+                    action: onOpenDashboard
+                )
+            }
         }
+        .padding(9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(DesignSystem.actionTrayFill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(DesignSystem.border, lineWidth: 0.5)
+        )
         .padding(.horizontal, 10)
-        .padding(.bottom, 4)
     }
 }
 
@@ -332,6 +369,12 @@ private struct ProjectStatusRow: View {
                         .foregroundStyle(.tertiary)
                 }
             }
+
+            if stage == .ready {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -349,5 +392,67 @@ private struct ProjectStatusRow: View {
             row
                 .onHover { isHovered = $0 }
         }
+    }
+}
+
+private struct ActionPillButton: View {
+    let title: String
+    let systemImage: String
+    var isPrimary: Bool = false
+    var isEnabled: Bool = true
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button {
+            action()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 10, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundStyle(foregroundColor)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(backgroundColor)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(borderColor, lineWidth: 0.5)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .onHover { isHovered = $0 }
+    }
+
+    private var foregroundColor: Color {
+        if !isEnabled {
+            return .secondary.opacity(0.65)
+        }
+        return isPrimary ? .accentColor : .primary
+    }
+
+    private var backgroundColor: Color {
+        if !isEnabled {
+            return DesignSystem.actionButtonFill.opacity(0.5)
+        }
+        if isPrimary {
+            return isHovered ? Color.accentColor.opacity(0.20) : Color.accentColor.opacity(0.14)
+        }
+        return isHovered ? DesignSystem.actionButtonHoverFill : DesignSystem.actionButtonFill
+    }
+
+    private var borderColor: Color {
+        if isPrimary {
+            return Color.accentColor.opacity(0.42)
+        }
+        return DesignSystem.border
     }
 }
