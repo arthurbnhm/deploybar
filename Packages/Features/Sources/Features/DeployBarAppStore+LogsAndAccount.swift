@@ -56,13 +56,30 @@ extension DeployBarAppStore {
     public func clearLocalData() {
         Task {
             monitorTask?.cancel()
+            monitorTask = nil
+            phase = .onboarding
+
             do {
                 try env.settingsStore.clear()
                 try await env.eventStore.clear()
+                await env.monitoringEngine.resetState()
+
                 settings = AppSettings()
+                selectedScope = settings.selectedScope
+                teams = []
+                availableProjects = []
+                selectedProjectIDs = []
                 projectStatuses = []
                 aggregateStatus = .unknown
                 monitorCadence = .idle
+                lastRefreshAt = nil
+                tokenError = nil
+                monitorError = nil
+                closeLogs()
+
+                if authUser != nil {
+                    try? await loadTeamsAndProjects()
+                }
             } catch {
                 monitorError = error.localizedDescription
             }

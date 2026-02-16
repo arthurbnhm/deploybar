@@ -12,7 +12,7 @@ Marketing website for DeployBar, built with Next.js App Router.
 ## Local development
 
 ```bash
-cd /Users/arthurbnhm/code/DeployBar/website
+cd website
 npm install
 npm run dev
 ```
@@ -20,7 +20,7 @@ npm run dev
 ## Production build
 
 ```bash
-cd /Users/arthurbnhm/code/DeployBar/website
+cd website
 npm run build
 npm run start
 ```

@@ -50,7 +50,7 @@ public final class VercelAPIClient: VercelClient {
                 id: $0.id,
                 name: $0.name,
                 teamId: $0.accountId,
-                updatedAt: Date(timeIntervalSince1970: TimeInterval($0.updatedAt / 1000))
+                updatedAt: Date(timeIntervalSince1970: TimeInterval($0.updatedAt) / 1000)
             )
         }
     }
@@ -78,7 +78,7 @@ public final class VercelAPIClient: VercelClient {
             id: deployment.uid,
             projectId: deployment.projectId,
             stage: DeploymentStageMapper.map(state: deployment.state, readyState: deployment.readyState),
-            createdAt: Date(timeIntervalSince1970: TimeInterval(deployment.created / 1000)),
+            createdAt: Date(timeIntervalSince1970: TimeInterval(deployment.created) / 1000),
             url: URL(string: "https://\(deployment.url)"),
             commitMessage: deployment.meta?.githubCommitMessage
         )
@@ -93,11 +93,11 @@ public final class VercelAPIClient: VercelClient {
         let request = try makeRequest(path: "/v2/deployments/\(deploymentId)/events", queryItems: queryItems)
         let payload: DeploymentEventListResponse = try await send(request, as: DeploymentEventListResponse.self)
 
-        return payload.events.enumerated().map { index, event in
+        return payload.events.map { event in
             DeploymentEvent(
-                id: "\(deploymentId)-\(event.created)-\(index)",
+                id: "\(deploymentId)-\(event.id)",
                 deploymentId: deploymentId,
-                createdAt: Date(timeIntervalSince1970: TimeInterval(event.created / 1000)),
+                createdAt: Date(timeIntervalSince1970: TimeInterval(event.created) / 1000),
                 level: event.type,
                 message: event.text
             )

@@ -44,12 +44,14 @@ extension DeployBarAppStore {
     }
 
     public func updateLaunchAtLogin(_ enabled: Bool) {
-        settings.launchAtLogin = enabled
-        persistSettings()
-
+        let previousValue = settings.launchAtLogin
         do {
             try env.launchAtLogin.setEnabled(enabled)
+            settings.launchAtLogin = env.launchAtLogin.status()
+            persistSettings()
+            monitorError = nil
         } catch {
+            settings.launchAtLogin = previousValue
             monitorError = error.localizedDescription
         }
     }
@@ -58,9 +60,11 @@ extension DeployBarAppStore {
         monitorTask?.cancel()
 
         guard !settings.watchedProjects.isEmpty else {
+            monitorTask = nil
             projectStatuses = []
             aggregateStatus = .unknown
             monitorCadence = .idle
+            lastRefreshAt = nil
             return
         }
 
@@ -85,12 +89,20 @@ extension DeployBarAppStore {
     }
 
     func performRefreshCycle() async -> TimeInterval {
+        guard phase == .running else {
+            return settings.pollingProfile.idleInterval
+        }
+
         do {
             let update = try await env.monitoringEngine.refresh(
                 projects: settings.watchedProjects,
                 profile: settings.pollingProfile,
                 menuIsOpen: menuIsOpen
             )
+
+            guard phase == .running else {
+                return settings.pollingProfile.idleInterval
+            }
 
             projectStatuses = update.statuses.sorted { lhs, rhs in
                 switch (lhs.snapshot?.createdAt, rhs.snapshot?.createdAt) {
@@ -118,6 +130,10 @@ extension DeployBarAppStore {
 
             return update.nextDelay
         } catch let error as DeployBarError {
+            guard phase == .running else {
+                return settings.pollingProfile.idleInterval
+            }
+
             switch error {
             case let .rateLimited(resetAt):
                 monitorError = error.localizedDescription
@@ -127,6 +143,11 @@ extension DeployBarAppStore {
                 monitorError = "Token revoked or unauthorized. Reconnect your Vercel token."
                 monitorCadence = .idle
                 try? env.tokenStore.clearToken()
+                await env.monitoringEngine.resetState()
+                monitorTask?.cancel()
+                projectStatuses = []
+                aggregateStatus = .unknown
+                lastRefreshAt = nil
                 authUser = nil
                 phase = .onboarding
                 return settings.pollingProfile.idleInterval
@@ -137,6 +158,10 @@ extension DeployBarAppStore {
         } catch is CancellationError {
             return settings.pollingProfile.activeInterval
         } catch {
+            guard phase == .running else {
+                return settings.pollingProfile.idleInterval
+            }
+
             monitorError = error.localizedDescription
             return settings.pollingProfile.activeInterval
         }

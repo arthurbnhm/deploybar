@@ -6,7 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "rm -rf .next && tsc --noEmit",
+    "lint": "npm run typecheck",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -7,16 +7,18 @@ final class DeploymentEventsDecodingTests: XCTestCase {
         let events = try decodeEvents(from: json)
 
         XCTAssertEqual(events.count, 1)
+        XCTAssertTrue(events[0].id.hasPrefix("event-1739000000000-stdout-"))
         XCTAssertEqual(events[0].type, "stdout")
         XCTAssertEqual(events[0].text, "Build completed")
         XCTAssertEqual(events[0].created, 1739000000000)
     }
 
     func testDecodesPayloadTextShape() throws {
-        let json = #"[{"created":"1739000000123","type":"stdout","payload":{"text":"Installing dependencies"}}]"#
+        let json = #"[{"created":"1739000000123","type":"stdout","payload":{"id":"evt_abc123","text":"Installing dependencies"}}]"#
         let events = try decodeEvents(from: json)
 
         XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(events[0].id, "evt_abc123")
         XCTAssertEqual(events[0].text, "Installing dependencies")
         XCTAssertEqual(events[0].created, 1739000000123)
     }

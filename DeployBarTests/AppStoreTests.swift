@@ -29,6 +29,16 @@ private actor NotificationSpyRouter: NotificationRouting {
     }
 }
 
+private final class FailingLaunchAtLoginController: LaunchAtLoginControlling, @unchecked Sendable {
+    func setEnabled(_: Bool) throws {
+        throw DeployBarError.networking("Unable to update launch at login.")
+    }
+
+    func status() -> Bool {
+        false
+    }
+}
+
 @MainActor
 final class AppStoreTests: XCTestCase {
     func testProjectSelectionIsCappedAtTwenty() async {
@@ -86,12 +96,70 @@ final class AppStoreTests: XCTestCase {
         XCTAssertTrue(store.settings.launchAtLogin)
     }
 
-    private func makeStore(notificationRouter: NotificationRouting) -> DeployBarAppStore {
+    func testLaunchAtLoginFailureRollsBackSetting() async {
+        let notifications = NotificationSpyRouter(granted: true)
+        let store = makeStore(
+            notificationRouter: notifications,
+            launchAtLogin: FailingLaunchAtLoginController()
+        )
+
+        XCTAssertFalse(store.settings.launchAtLogin)
+        store.updateLaunchAtLogin(true)
+
+        XCTAssertFalse(store.settings.launchAtLogin)
+        XCTAssertEqual(store.monitorError, "Unable to update launch at login.")
+    }
+
+    func testLoadTeamsAndProjectsPrunesMissingWatchedProjects() async throws {
+        let store = DeployBarAppStore(environment: .preview())
+        store.settings = AppSettings(
+            watchedProjects: [
+                WatchedProject(id: "missing_project", name: "Missing", teamId: nil, teamSlug: nil)
+            ],
+            selectedScope: .personal
+        )
+        store.selectedScope = .personal
+
+        try await store.loadTeamsAndProjects()
+
+        XCTAssertTrue(store.selectedProjectIDs.isEmpty)
+        XCTAssertTrue(store.settings.watchedProjects.isEmpty)
+    }
+
+    func testClearLocalDataResetsSelectionStateAndReturnsToOnboarding() async {
+        let store = DeployBarAppStore(environment: .preview())
+        store.tokenInput = "token_123"
+        await store.connectToken()
+
+        guard let firstProjectID = store.availableProjects.first?.id else {
+            XCTFail("Expected preview projects to be loaded.")
+            return
+        }
+
+        store.toggleProjectSelection(firstProjectID)
+        await store.completeOnboarding()
+        XCTAssertEqual(store.phase, .running)
+
+        store.clearLocalData()
+        await waitForCondition {
+            store.phase == .onboarding && store.settings.watchedProjects.isEmpty
+        }
+
+        XCTAssertTrue(store.selectedProjectIDs.isEmpty)
+        XCTAssertEqual(store.selectedScope, .personal)
+        XCTAssertTrue(store.projectStatuses.isEmpty)
+        XCTAssertEqual(store.aggregateStatus, .unknown)
+        XCTAssertEqual(store.monitorCadence, .idle)
+    }
+
+    private func makeStore(
+        notificationRouter: NotificationRouting,
+        launchAtLogin: LaunchAtLoginControlling = InMemoryLaunchAtLoginController()
+    ) -> DeployBarAppStore {
         let tokenStore = InMemoryTokenStore()
         let settingsStore = InMemorySettingsStore()
         let eventStore = InMemoryEventStore()
         let client = MockVercelClient()
-        let launch = InMemoryLaunchAtLoginController()
         let sound = InMemorySoundPlayer()
         let engine = MonitoringEngine(client: client)
 
@@ -102,7 +170,7 @@ final class AppStoreTests: XCTestCase {
             vercelClient: client,
             notificationRouter: notificationRouter,
             soundPlayer: sound,
-            launchAtLogin: launch,
+            launchAtLogin: launchAtLogin,
             monitoringEngine: engine
         )
 
@@ -120,5 +188,21 @@ final class AppStoreTests: XCTestCase {
         }
 
         XCTFail("Timed out waiting for \(expected) notifications.")
+    }
+
+    private func waitForCondition(
+        timeout: TimeInterval = 1.0,
+        condition: () -> Bool
+    ) async {
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while Date() < deadline {
+            if condition() {
+                return
+            }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+
+        XCTFail("Timed out waiting for condition.")
     }
 }

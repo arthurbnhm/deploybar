@@ -96,11 +96,13 @@ struct DeploymentEventListResponse: Decodable {
 }
 
 struct DeploymentEventDTO: Decodable {
+    let id: String
     let created: Int64
     let type: String
     let text: String
 
     private enum CodingKeys: String, CodingKey {
+        case id
         case created
         case type
         case text
@@ -110,6 +112,7 @@ struct DeploymentEventDTO: Decodable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let payload = try? container.decode(LooseJSON.self, forKey: .payload)
 
         if let createdInt = try? container.decode(Int64.self, forKey: .created) {
             created = createdInt
@@ -118,8 +121,7 @@ struct DeploymentEventDTO: Decodable {
         } else if let createdString = try? container.decode(String.self, forKey: .created), let createdInt = Int64(createdString) {
             created = createdInt
         } else if
-            let payload = try? container.decode(LooseJSON.self, forKey: .payload),
-            let payloadDate = payload["date"]?.int64Value
+            let payloadDate = payload?["date"]?.int64Value
         {
             created = payloadDate
         } else {
@@ -128,24 +130,37 @@ struct DeploymentEventDTO: Decodable {
 
         type = (try? container.decode(String.self, forKey: .type)) ?? "event"
 
+        let resolvedText: String
         if let directText = try? container.decode(String.self, forKey: .text), !directText.isEmpty {
-            text = directText
-            return
-        }
-
-        if let directMessage = try? container.decode(String.self, forKey: .message), !directMessage.isEmpty {
-            text = directMessage
-            return
-        }
-
-        if let payload = try? container.decode(LooseJSON.self, forKey: .payload) {
+            resolvedText = directText
+        } else if let directMessage = try? container.decode(String.self, forKey: .message), !directMessage.isEmpty {
+            resolvedText = directMessage
+        } else if let payload {
             if let message = payload.preferredLogMessage, !message.isEmpty {
-                text = message
-                return
+                resolvedText = message
+            } else {
+                resolvedText = type
             }
+        } else {
+            resolvedText = type
         }
+        text = resolvedText
 
-        text = type
+        if let directID = try? container.decode(String.self, forKey: .id), !directID.isEmpty {
+            id = directID
+        } else if let payloadID = payload?["id"]?.stringValue, !payloadID.isEmpty {
+            id = payloadID
+        } else {
+            id = Self.fallbackID(created: created, type: type, text: resolvedText)
+        }
+    }
+
+    private static func fallbackID(created: Int64, type: String, text: String) -> String {
+        let compactText = text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        let fragment = String(compactText.prefix(64))
+        return "event-\(created)-\(type)-\(fragment)"
     }
 }
 

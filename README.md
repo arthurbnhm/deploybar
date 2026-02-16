@@ -22,14 +22,12 @@ DeployBar is a native macOS menu bar app for monitoring Vercel production deploy
 ## Build
 
 ```bash
-cd /Users/arthurbnhm/code/DeployBar
 swift build
 ```
 
 ## Test
 
 ```bash
-cd /Users/arthurbnhm/code/DeployBar
 swift test
 ```
 
@@ -38,7 +36,7 @@ swift test
 A marketing site lives in `website/` (Next.js 16 + React 19).
 
 ```bash
-cd /Users/arthurbnhm/code/DeployBar/website
+cd website
 npm install
 npm run dev
 ```
@@ -46,9 +44,9 @@ npm run dev
 Website checks:
 
 ```bash
-cd /Users/arthurbnhm/code/DeployBar/website
+cd website
 npm run build
-npm run lint
+npm run typecheck
 ```
 
 ## Project Layout

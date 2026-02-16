@@ -153,9 +153,23 @@ extension DeployBarAppStore {
         }
 
         availableProjects = ProjectSelectionService.sortedProjects(projects)
-        selectedProjectIDs = ProjectSelectionService.visibleSelectedIDs(
+        let normalizedSelectedIDs = ProjectSelectionService.visibleSelectedIDs(
             selectedIDs: Set(settings.watchedProjects.map(\.id)),
             availableProjects: availableProjects
         )
+        selectedProjectIDs = normalizedSelectedIDs
+
+        let normalizedWatchedProjects = ProjectSelectionService.watchedProjects(
+            availableProjects: availableProjects,
+            selectedIDs: normalizedSelectedIDs,
+            selectedScope: selectedScope,
+            teams: teams
+        )
+
+        if settings.watchedProjects != normalizedWatchedProjects || settings.selectedScope != selectedScope {
+            settings.watchedProjects = normalizedWatchedProjects
+            settings.selectedScope = selectedScope
+            persistSettings()
+        }
     }
 }

@@ -23,6 +23,11 @@ extension DeployBarAppStore {
         }
 
         settings = startupContext.settings
+        let launchAtLoginStatus = env.launchAtLogin.status()
+        if settings.launchAtLogin != launchAtLoginStatus {
+            settings.launchAtLogin = launchAtLoginStatus
+            persistSettings()
+        }
         selectedScope = settings.selectedScope
 
         guard !startupContext.storedToken.isEmpty else {
