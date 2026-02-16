@@ -245,6 +245,7 @@ public struct MenuBarContentView: View {
     private func projectDashboardURL(for status: ProjectStatus) -> URL? {
         VercelLinks.projectDashboardURL(
             project: status.project,
+            teams: store.teams,
             username: store.authUser?.username
         )
     }

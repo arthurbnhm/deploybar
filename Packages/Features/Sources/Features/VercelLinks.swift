@@ -8,8 +8,14 @@ enum VercelLinks {
         return set
     }()
 
-    static func projectDashboardURL(project: WatchedProject, username: String?) -> URL? {
-        let scope = project.teamSlug ?? username
+    static func projectDashboardURL(
+        project: WatchedProject,
+        teams: [Team],
+        username: String?
+    ) -> URL? {
+        let scope = project.teamSlug
+            ?? teams.first(where: { $0.id == project.teamId })?.slug
+            ?? username
         guard let scope, !scope.isEmpty else {
             return nil
         }

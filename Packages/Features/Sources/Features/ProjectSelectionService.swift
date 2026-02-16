@@ -39,21 +39,22 @@ enum ProjectSelectionService {
         teams: [Team]
     ) -> [WatchedProject] {
         let selectedProjects = availableProjects.filter { selectedIDs.contains($0.id) }
-        let teamSlug: String?
-
-        switch selectedScope {
-        case .personal:
-            teamSlug = nil
-        case let .team(id, _):
-            teamSlug = teams.first(where: { $0.id == id })?.slug
-        }
 
         return selectedProjects.map {
-            WatchedProject(
+            let resolvedTeamID = $0.teamId ?? selectedScope.teamId
+            let resolvedTeamSlug = teams.first(where: { $0.id == resolvedTeamID })?.slug
+                ?? {
+                    if case let .team(_, slug) = selectedScope {
+                        return slug
+                    }
+                    return nil
+                }()
+
+            return WatchedProject(
                 id: $0.id,
                 name: $0.name,
-                teamId: selectedScope.teamId,
-                teamSlug: teamSlug
+                teamId: resolvedTeamID,
+                teamSlug: resolvedTeamSlug
             )
         }
     }

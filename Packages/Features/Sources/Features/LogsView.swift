@@ -129,6 +129,7 @@ public struct LogsView: View {
         }
         return VercelLinks.projectDashboardURL(
             project: project,
+            teams: store.teams,
             username: store.authUser?.username
         )
     }
