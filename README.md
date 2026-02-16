@@ -19,6 +19,17 @@ DeployBar is a native macOS menu bar app for monitoring Vercel production deploy
 - Apple Silicon (`arm64`) target for V1
 - Xcode 16+ / Swift 6+
 
+## Download
+
+For end users, download the latest app build from GitHub Releases:
+
+- https://github.com/arthurbnhm/DeployBar/releases/latest
+
+After downloading:
+
+1. Move `DeployBar.app` to `/Applications` (or `~/Applications`).
+2. Open DeployBar and approve Keychain access when prompted.
+
 ## Build
 
 ```bash
