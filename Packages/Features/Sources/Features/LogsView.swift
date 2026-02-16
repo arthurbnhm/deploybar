@@ -96,13 +96,23 @@ public struct LogsView: View {
                 }
 
                 HStack(spacing: 8) {
-                    if let url = store.selectedLogsDeployment?.url {
-                        Link(destination: url) {
-                            Label("Open in Vercel", systemImage: "arrow.up.right.square")
-                                .font(.system(size: 12, weight: .medium))
-                        }
-                        .buttonStyle(.plain)
+                    Button {
+                        openOnline()
+                    } label: {
+                        Label("Open Online", systemImage: "globe")
+                            .font(.system(size: 12, weight: .medium))
                     }
+                    .buttonStyle(.plain)
+                    .disabled(store.selectedLogsDeployment?.url == nil)
+
+                    Button {
+                        openDashboard()
+                    } label: {
+                        Label("Open Dashboard", systemImage: "rectangle.grid.2x2")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(projectDashboardURL == nil)
 
                     Text("\(store.logEvents.count) events")
                         .font(.system(size: 11))
@@ -111,6 +121,30 @@ public struct LogsView: View {
                 }
             }
         }
+    }
+
+    private var projectDashboardURL: URL? {
+        guard let project = store.selectedLogsProject else {
+            return nil
+        }
+        return VercelLinks.projectDashboardURL(
+            project: project,
+            username: store.authUser?.username
+        )
+    }
+
+    private func openOnline() {
+        guard let url = store.selectedLogsDeployment?.url else {
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func openDashboard() {
+        guard let url = projectDashboardURL else {
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 
     private var logList: some View {

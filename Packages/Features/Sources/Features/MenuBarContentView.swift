@@ -5,6 +5,7 @@ import SwiftUI
 public struct MenuBarContentView: View {
     @ObservedObject var store: DeployBarAppStore
     @Environment(\.openWindow) private var openWindow
+    @State private var expandedReadyActionsProjectID: String?
 
     public init(store: DeployBarAppStore) {
         self.store = store
@@ -102,9 +103,22 @@ public struct MenuBarContentView: View {
             ScrollView {
                 VStack(spacing: 4) {
                     ForEach(store.projectStatuses) { status in
-                        ProjectStatusRow(status: status) {
-                            handleProjectTap(status)
+                        VStack(spacing: 6) {
+                            ProjectStatusRow(status: status) {
+                                handleProjectTap(status)
+                            }
+
+                            if shouldShowInlineActions(for: status) {
+                                ReadyDeploymentActionsRow(
+                                    onViewLogs: { openLogs(for: status) },
+                                    onOpenOnline: { openOnline(for: status) },
+                                    onOpenDashboard: { openDashboard(for: status) },
+                                    canOpenDashboard: projectDashboardURL(for: status) != nil
+                                )
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            }
                         }
+                        .animation(.snappy(duration: 0.2), value: expandedReadyActionsProjectID)
                     }
                 }
                 .padding(.horizontal, 8)
@@ -177,50 +191,102 @@ public struct MenuBarContentView: View {
 
     private func handleProjectTap(_ status: ProjectStatus) {
         guard let snapshot = status.snapshot else {
-            Task { await store.openLogs(for: status) }
-            presentWindow(.logs, openWindow: openWindow)
+            openLogs(for: status)
             return
         }
 
         switch snapshot.stage {
         case .ready:
-            presentReadyDeploymentActions(for: status)
+            withAnimation(.snappy(duration: 0.2)) {
+                if expandedReadyActionsProjectID == status.id {
+                    expandedReadyActionsProjectID = nil
+                } else {
+                    expandedReadyActionsProjectID = status.id
+                }
+            }
         case .failed:
-            Task { await store.openLogs(for: status) }
-            presentWindow(.logs, openWindow: openWindow)
+            expandedReadyActionsProjectID = nil
+            openLogs(for: status)
         default:
+            expandedReadyActionsProjectID = nil
             break
         }
     }
 
-    private func presentReadyDeploymentActions(for status: ProjectStatus) {
-        let alert = NSAlert()
-        alert.alertStyle = .informational
-        alert.messageText = "Deployment Actions"
-        alert.informativeText = "Choose an action for \(status.project.name)."
-        alert.addButton(withTitle: "View Logs")
-
-        let hasVercelURL = status.snapshot?.url != nil
-        if hasVercelURL {
-            alert.addButton(withTitle: "Open in Vercel")
+    private func shouldShowInlineActions(for status: ProjectStatus) -> Bool {
+        guard status.snapshot?.stage == .ready else {
+            return false
         }
+        return expandedReadyActionsProjectID == status.id
+    }
 
-        alert.addButton(withTitle: "Cancel")
+    private func openLogs(for status: ProjectStatus) {
+        expandedReadyActionsProjectID = nil
+        Task { await store.openLogs(for: status) }
+        presentWindow(.logs, openWindow: openWindow)
+    }
 
-        NSApp.activate(ignoringOtherApps: true)
-        let response = alert.runModal()
-
-        if response == .alertFirstButtonReturn {
-            Task { await store.openLogs(for: status) }
-            presentWindow(.logs, openWindow: openWindow)
+    private func openOnline(for status: ProjectStatus) {
+        expandedReadyActionsProjectID = nil
+        guard let url = status.snapshot?.url else {
             return
         }
+        NSWorkspace.shared.open(url)
+    }
 
-        if hasVercelURL,
-           response == .alertSecondButtonReturn,
-           let url = status.snapshot?.url {
-            NSWorkspace.shared.open(url)
+    private func openDashboard(for status: ProjectStatus) {
+        expandedReadyActionsProjectID = nil
+        guard let url = projectDashboardURL(for: status) else {
+            return
         }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func projectDashboardURL(for status: ProjectStatus) -> URL? {
+        VercelLinks.projectDashboardURL(
+            project: status.project,
+            username: store.authUser?.username
+        )
+    }
+}
+
+private struct ReadyDeploymentActionsRow: View {
+    let onViewLogs: () -> Void
+    let onOpenOnline: () -> Void
+    let onOpenDashboard: () -> Void
+    let canOpenDashboard: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button {
+                onViewLogs()
+            } label: {
+                Label("View Logs", systemImage: "doc.text.magnifyingglass")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            Button {
+                onOpenOnline()
+            } label: {
+                Label("Open Online", systemImage: "globe")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            Button {
+                onOpenDashboard()
+            } label: {
+                Label("Dashboard", systemImage: "rectangle.grid.2x2")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(!canOpenDashboard)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.bottom, 4)
     }
 }
 
