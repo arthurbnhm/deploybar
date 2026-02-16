@@ -15,9 +15,6 @@ public struct DeployBarSettingsView: View {
 
             MonitoringSettingsPane(store: store)
                 .tabItem { Label("Monitoring", systemImage: "waveform.path.ecg") }
-
-            AccountSettingsPane(store: store)
-                .tabItem { Label("Account", systemImage: "person.crop.circle.fill") }
         }
         .frame(width: 520, height: 420)
         .background(WindowAccessor())
@@ -176,62 +173,6 @@ private struct PollingProfileCard: View {
         .onHover { isHovered = $0 }
         .accessibilityLabel("\(title) polling profile")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-}
-
-// MARK: - Account
-
-private struct AccountSettingsPane: View {
-    @ObservedObject var store: DeployBarAppStore
-    @State private var showSignOutConfirmation = false
-
-    var body: some View {
-        Form {
-            if let user = store.authUser {
-                Section {
-                    HStack(spacing: 12) {
-                        Image(systemName: "person.crop.circle.fill")
-                            .font(.system(size: 36))
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.secondary)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("@\(user.username)")
-                                .font(.headline)
-                            if let email = user.email {
-                                Text(email)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-
-            Section {
-                Button("Clear Local Cache") {
-                    store.clearLocalData()
-                }
-            } footer: {
-                Text("Removes stored deployment logs and resets local state.")
-            }
-
-            Section {
-                Button("Sign Out", role: .destructive) {
-                    showSignOutConfirmation = true
-                }
-                .alert("Sign Out of DeployBar?", isPresented: $showSignOutConfirmation) {
-                    Button("Cancel", role: .cancel) {}
-                    Button("Sign Out", role: .destructive) {
-                        store.signOut()
-                    }
-                } message: {
-                    Text("This will remove your API token and all local data. You'll need to re-enter your token to use DeployBar again.")
-                }
-            }
-        }
-        .formStyle(.grouped)
     }
 }
 

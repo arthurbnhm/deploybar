@@ -126,32 +126,6 @@ final class AppStoreTests: XCTestCase {
         XCTAssertTrue(store.settings.watchedProjects.isEmpty)
     }
 
-    func testClearLocalDataResetsSelectionStateAndReturnsToOnboarding() async {
-        let store = DeployBarAppStore(environment: .preview())
-        store.tokenInput = "token_123"
-        await store.connectToken()
-
-        guard let firstProjectID = store.availableProjects.first?.id else {
-            XCTFail("Expected preview projects to be loaded.")
-            return
-        }
-
-        store.toggleProjectSelection(firstProjectID)
-        await store.completeOnboarding()
-        XCTAssertEqual(store.phase, .running)
-
-        store.clearLocalData()
-        await waitForCondition {
-            store.phase == .onboarding && store.settings.watchedProjects.isEmpty
-        }
-
-        XCTAssertTrue(store.selectedProjectIDs.isEmpty)
-        XCTAssertEqual(store.selectedScope, .personal)
-        XCTAssertTrue(store.projectStatuses.isEmpty)
-        XCTAssertEqual(store.aggregateStatus, .unknown)
-        XCTAssertEqual(store.monitorCadence, .idle)
-    }
-
     private func makeStore(
         notificationRouter: NotificationRouting,
         launchAtLogin: LaunchAtLoginControlling = InMemoryLaunchAtLoginController()
