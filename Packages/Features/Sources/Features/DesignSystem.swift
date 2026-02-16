@@ -1,4 +1,5 @@
 import Core
+import AppKit
 import SwiftUI
 
 enum DesignSystem {
@@ -6,12 +7,77 @@ enum DesignSystem {
     static let cardPadding: CGFloat = 14
     static let sectionSpacing: CGFloat = 14
 
-    static let panelFill = Color.black.opacity(0.035)
-    static let rowHoverFill = Color.black.opacity(0.05)
-    static let border = Color.black.opacity(0.08)
+    static let panelFill = dynamic(
+        light: NSColor.black.withAlphaComponent(0.035),
+        dark: NSColor.white.withAlphaComponent(0.075)
+    )
+    static let rowHoverFill = dynamic(
+        light: NSColor.black.withAlphaComponent(0.05),
+        dark: NSColor.white.withAlphaComponent(0.11)
+    )
+    static let border = dynamic(
+        light: NSColor.black.withAlphaComponent(0.08),
+        dark: NSColor.white.withAlphaComponent(0.16)
+    )
 
-    static let windowLightTop = Color(red: 0.96, green: 0.96, blue: 0.96)
-    static let windowLightBottom = Color(red: 0.91, green: 0.91, blue: 0.91)
+    static let windowBackgroundTop = dynamic(
+        light: NSColor(red: 0.96, green: 0.96, blue: 0.96, alpha: 1),
+        dark: NSColor(red: 0.13, green: 0.14, blue: 0.16, alpha: 1)
+    )
+    static let windowBackgroundBottom = dynamic(
+        light: NSColor(red: 0.91, green: 0.91, blue: 0.91, alpha: 1),
+        dark: NSColor(red: 0.09, green: 0.10, blue: 0.12, alpha: 1)
+    )
+    static let windowGlow = dynamic(
+        light: NSColor.white.withAlphaComponent(0.72),
+        dark: NSColor.white.withAlphaComponent(0.16)
+    )
+    static let windowOverlayTop = dynamic(
+        light: NSColor.white.withAlphaComponent(0.06),
+        dark: NSColor.white.withAlphaComponent(0.03)
+    )
+    static let windowOverlayBottom = dynamic(
+        light: NSColor.black.withAlphaComponent(0.10),
+        dark: NSColor.black.withAlphaComponent(0.28)
+    )
+
+    static let stepProgressTrack = dynamic(
+        light: NSColor.black.withAlphaComponent(0.08),
+        dark: NSColor.white.withAlphaComponent(0.14)
+    )
+
+    static let chipFill = dynamic(
+        light: NSColor.black.withAlphaComponent(0.06),
+        dark: NSColor.white.withAlphaComponent(0.08)
+    )
+    static let chipHoverFill = dynamic(
+        light: NSColor.black.withAlphaComponent(0.10),
+        dark: NSColor.white.withAlphaComponent(0.16)
+    )
+    static let chipCloseFill = dynamic(
+        light: NSColor.black.withAlphaComponent(0.06),
+        dark: NSColor.white.withAlphaComponent(0.14)
+    )
+    static let chipCloseHoverFill = dynamic(
+        light: NSColor.black.withAlphaComponent(0.12),
+        dark: NSColor.white.withAlphaComponent(0.22)
+    )
+    static let chipBorder = dynamic(
+        light: NSColor.black.withAlphaComponent(0.08),
+        dark: NSColor.white.withAlphaComponent(0.16)
+    )
+
+    private static func dynamic(light: NSColor, dark: NSColor) -> Color {
+        let dynamicColor = NSColor(name: nil) { appearance in
+            switch appearance.bestMatch(from: [.darkAqua, .aqua]) {
+            case .darkAqua?:
+                return dark
+            default:
+                return light
+            }
+        }
+        return Color(nsColor: dynamicColor)
+    }
 }
 
 extension DeploymentStage {

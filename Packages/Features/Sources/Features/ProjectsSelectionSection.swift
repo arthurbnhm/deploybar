@@ -208,7 +208,7 @@ struct ProjectChip: View {
                     .frame(width: 14, height: 14)
                     .background(
                         Circle()
-                            .fill(Color.black.opacity(isHovered ? 0.12 : 0.06))
+                            .fill(isHovered ? DesignSystem.chipCloseHoverFill : DesignSystem.chipCloseFill)
                     )
             }
             .buttonStyle(.plain)
@@ -218,11 +218,11 @@ struct ProjectChip: View {
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(Color.black.opacity(isHovered ? 0.10 : 0.06))
+                .fill(isHovered ? DesignSystem.chipHoverFill : DesignSystem.chipFill)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.08), lineWidth: 0.5)
+                .strokeBorder(DesignSystem.chipBorder, lineWidth: 0.5)
         )
         .onHover { isHovered = $0 }
     }

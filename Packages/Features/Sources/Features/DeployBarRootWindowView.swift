@@ -34,14 +34,14 @@ public struct DeployBarRootWindowView: View {
         case .onboarding:
             ZStack {
                 LinearGradient(
-                    colors: [DesignSystem.windowLightTop, DesignSystem.windowLightBottom],
+                    colors: [DesignSystem.windowBackgroundTop, DesignSystem.windowBackgroundBottom],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
                 .ignoresSafeArea()
 
                 RadialGradient(
-                    colors: [Color.white.opacity(0.75), Color.clear],
+                    colors: [DesignSystem.windowGlow, Color.clear],
                     center: .topLeading,
                     startRadius: 30,
                     endRadius: 420
@@ -53,7 +53,7 @@ public struct DeployBarRootWindowView: View {
                 .ignoresSafeArea()
 
             LinearGradient(
-                colors: [Color.white.opacity(0.06), Color.black.opacity(0.10)],
+                colors: [DesignSystem.windowOverlayTop, DesignSystem.windowOverlayBottom],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )

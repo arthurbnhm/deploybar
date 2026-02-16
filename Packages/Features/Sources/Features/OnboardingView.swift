@@ -119,7 +119,7 @@ public struct OnboardingView: View {
                 HStack(spacing: 6) {
                     ForEach(OnboardingStep.allCases, id: \.self) { item in
                         Capsule(style: .continuous)
-                            .fill(item.rawValue <= step.rawValue ? Color.accentColor.opacity(0.75) : Color.black.opacity(0.08))
+                            .fill(item.rawValue <= step.rawValue ? Color.accentColor.opacity(0.75) : DesignSystem.stepProgressTrack)
                             .frame(width: item == step ? 26 : 14, height: 5)
                     }
                 }

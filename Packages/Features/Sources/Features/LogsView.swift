@@ -13,14 +13,14 @@ public struct LogsView: View {
     public var body: some View {
         ZStack {
             LinearGradient(
-                colors: [DesignSystem.windowLightTop, DesignSystem.windowLightBottom],
+                colors: [DesignSystem.windowBackgroundTop, DesignSystem.windowBackgroundBottom],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
 
             RadialGradient(
-                colors: [Color.white.opacity(0.65), Color.clear],
+                colors: [DesignSystem.windowGlow, Color.clear],
                 center: .topLeading,
                 startRadius: 40,
                 endRadius: 420
