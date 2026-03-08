@@ -20,7 +20,7 @@ public struct MenuBarContentView: View {
 
             SubtleDivider()
 
-            if store.phase != .running {
+            if store.requiresSetup {
                 setupPrompt
                     .padding(14)
             } else {
@@ -73,7 +73,7 @@ public struct MenuBarContentView: View {
     private var setupPrompt: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Finish setup in Projects settings to start monitoring your Vercel production deploys.")
+                Text(store.authStatusMessage ?? "Finish setup in Projects settings to start monitoring your Vercel production deploys.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
 
@@ -101,6 +101,22 @@ public struct MenuBarContentView: View {
             .padding(.vertical, 24)
         } else if !store.projectStatuses.isEmpty {
             VStack(spacing: 6) {
+                if store.isAuthRetrying {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.mini)
+
+                        Text(store.authStatusMessage ?? "Reconnecting authentication...")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+
+                        Spacer()
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.top, 6)
+                }
+
                 if let cacheMessage {
                     HStack(spacing: 6) {
                         Image(systemName: "clock.arrow.circlepath")
@@ -227,8 +243,22 @@ public struct MenuBarContentView: View {
     }
 
     private var headerSubtitle: String {
+        switch store.authConnectionState {
+        case .loading:
+            return "Checking saved token"
+        case .setupRequired:
+            return "Auth required"
+        case let .retrying(reason):
+            if store.isShowingCachedStatuses {
+                return "\(reason) • cached"
+            }
+            return reason
+        case .connected:
+            break
+        }
+
         guard let user = store.authUser else {
-            return "Waiting for auth"
+            return "Connected"
         }
 
         if store.isShowingCachedStatuses {

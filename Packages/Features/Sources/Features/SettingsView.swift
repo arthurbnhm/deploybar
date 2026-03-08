@@ -33,8 +33,8 @@ private struct ProjectsSettingsPane: View {
             Section {
                 HStack(spacing: 10) {
                     Image(systemName: "triangle.fill")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(.primary)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(Color(red: 0.56, green: 0.56, blue: 0.58))
 
                     Text("DeployBar")
                         .font(.system(size: 20, weight: .bold))
@@ -69,8 +69,12 @@ private struct TokenConnectionSection: View {
         store.authUser != nil
     }
 
+    private var requiresTokenInput: Bool {
+        store.shouldPromptForTokenInput && !isConnected
+    }
+
     private var isEditing: Bool {
-        !isConnected || isEditingToken
+        requiresTokenInput || isEditingToken
     }
 
     private var submitDisabled: Bool {
@@ -81,6 +85,22 @@ private struct TokenConnectionSection: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Vercel Connection")
                 .font(.system(size: 13, weight: .semibold))
+
+            if store.isAuthRetrying, !isConnected {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+
+                    Text(store.authStatusMessage ?? "Reconnecting to your saved token...")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.blue.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
 
             if isEditing {
                 VStack(alignment: .leading, spacing: 8) {
@@ -184,13 +204,13 @@ private struct TokenConnectionSection: View {
             }
         }
         .onAppear {
-            if !isConnected {
+            if requiresTokenInput {
                 isEditingToken = true
                 tokenFieldFocused = true
             }
         }
         .onChange(of: store.authUser?.id) { _, newID in
-            if newID == nil {
+            if newID == nil, requiresTokenInput {
                 isEditingToken = true
                 tokenFieldFocused = true
             }

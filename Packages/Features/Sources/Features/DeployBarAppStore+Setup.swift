@@ -33,6 +33,7 @@ extension DeployBarAppStore {
         let previousScope = selectedScope
         let previousPhase = phase
         let previousMonitorError = monitorError
+        let previousAuthConnectionState = authConnectionState
 
         monitorTask?.cancel()
         monitorTask = nil
@@ -44,6 +45,7 @@ extension DeployBarAppStore {
             try env.tokenStore.saveToken(trimmed)
             let user = try await env.vercelClient.validateToken()
             authUser = user
+            authConnectionState = .connected
             try await loadTeamsAndProjects(preferredSelectedIDs: previousSelectedProjectIDs)
             tokenError = nil
 
@@ -74,6 +76,7 @@ extension DeployBarAppStore {
             selectedScope = previousScope
             phase = previousPhase
             monitorError = previousMonitorError
+            authConnectionState = previousAuthConnectionState
             tokenNotice = previousTokenNotice
             tokenError = userFacingAuthError(error)
 

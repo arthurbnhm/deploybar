@@ -115,11 +115,23 @@ extension DeployBarAppStore {
             monitorCadence = update.cadence
             monitorError = nil
             lastRefreshAt = Date()
+            clearTransientAuthFailuresIfNeeded()
             isInitialRefreshInFlight = false
             hasCompletedInitialRefresh = true
             isShowingCachedStatuses = false
             cachedStatusAge = 0
             persistStatusCache(from: projectStatuses, refreshedAt: lastRefreshAt ?? Date())
+
+            if authUser == nil,
+               let recoveredUser = try? await env.vercelClient.validateToken()
+            {
+                authUser = recoveredUser
+            }
+
+            if authUser != nil {
+                authConnectionState = .connected
+                tokenError = nil
+            }
 
             try await env.eventStore.purge(olderThan: Date().addingTimeInterval(-7 * 24 * 60 * 60))
             await handleTransitions(update.transitions)
@@ -136,14 +148,25 @@ extension DeployBarAppStore {
                 monitorCadence = .idle
                 return max(3, resetAt.timeIntervalSinceNow)
             case .unauthorized:
-                monitorError = "Token revoked or unauthorized. Reconnect your Vercel token."
-                monitorCadence = .idle
-                try? env.tokenStore.clearToken()
-                await env.monitoringEngine.resetState()
-                authUser = nil
-                tokenNotice = nil
-                enterSetupRequiredState()
+                await handleHardAuthFailure(
+                    message: "Token revoked or unauthorized. Reconnect your Vercel token.",
+                    clearStoredToken: true
+                )
                 return settings.pollingProfile.idleInterval
+            case .missingToken:
+                return registerTransientAuthFailure(
+                    reason: monitoringRetryReason(for: error),
+                    escalateMessage: "Saved token is unavailable. Reconnect your Vercel token."
+                )
+            case .persistence:
+                if isTransientKeychainAccessError(error) {
+                    return registerTransientAuthFailure(
+                        reason: monitoringRetryReason(for: error),
+                        escalateMessage: "Saved token is unavailable. Reconnect your Vercel token."
+                    )
+                }
+                monitorError = error.localizedDescription
+                return settings.pollingProfile.activeInterval
             default:
                 monitorError = error.localizedDescription
                 return settings.pollingProfile.activeInterval
@@ -153,6 +176,13 @@ extension DeployBarAppStore {
         } catch {
             guard phase == .running else {
                 return settings.pollingProfile.idleInterval
+            }
+
+            if isTransientKeychainAccessError(error) {
+                return registerTransientAuthFailure(
+                    reason: monitoringRetryReason(for: error),
+                    escalateMessage: "Saved token is unavailable. Reconnect your Vercel token."
+                )
             }
 
             monitorError = error.localizedDescription

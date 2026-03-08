@@ -87,6 +87,88 @@ private actor TokenPruningMockVercelClient: VercelClient {
     }
 }
 
+private actor MissingTokenRefreshMockVercelClient: VercelClient {
+    func validateToken() async throws -> AuthUser {
+        AuthUser(id: "u1", username: "missing-token-user", email: nil)
+    }
+
+    func listTeams(limit _: Int, until _: Int?) async throws -> [Team] {
+        []
+    }
+
+    func listProjects(teamId: String?, limit _: Int, until _: Int?) async throws -> [Project] {
+        [
+            Project(id: "proj_1", name: "Website", teamId: teamId, updatedAt: Date())
+        ]
+    }
+
+    func latestProductionDeployment(projectId _: String, teamId _: String?) async throws -> DeploymentSnapshot? {
+        throw DeployBarError.missingToken
+    }
+
+    func deploymentEvents(deploymentId: String, limit _: Int, since _: Int?) async throws -> [DeploymentEvent] {
+        [
+            DeploymentEvent(
+                id: "\(deploymentId)-1",
+                deploymentId: deploymentId,
+                createdAt: Date(),
+                level: "info",
+                message: "Build completed"
+            )
+        ]
+    }
+}
+
+private actor FlakyStartupAuthMockVercelClient: VercelClient {
+    private var remainingValidationFailures: Int
+
+    init(remainingValidationFailures: Int) {
+        self.remainingValidationFailures = remainingValidationFailures
+    }
+
+    func validateToken() async throws -> AuthUser {
+        if remainingValidationFailures > 0 {
+            remainingValidationFailures -= 1
+            throw DeployBarError.networking("Temporary network failure")
+        }
+
+        return AuthUser(id: "u1", username: "retry-user", email: nil)
+    }
+
+    func listTeams(limit _: Int, until _: Int?) async throws -> [Team] {
+        []
+    }
+
+    func listProjects(teamId: String?, limit _: Int, until _: Int?) async throws -> [Project] {
+        [
+            Project(id: "proj_1", name: "Website", teamId: teamId, updatedAt: Date())
+        ]
+    }
+
+    func latestProductionDeployment(projectId: String, teamId _: String?) async throws -> DeploymentSnapshot? {
+        DeploymentSnapshot(
+            id: "dep_\(projectId)",
+            projectId: projectId,
+            stage: .ready,
+            createdAt: Date(),
+            url: URL(string: "https://example.vercel.app"),
+            commitMessage: "Bootstrap retry deployment"
+        )
+    }
+
+    func deploymentEvents(deploymentId: String, limit _: Int, since _: Int?) async throws -> [DeploymentEvent] {
+        [
+            DeploymentEvent(
+                id: "\(deploymentId)-1",
+                deploymentId: deploymentId,
+                createdAt: Date(),
+                level: "info",
+                message: "Build completed"
+            )
+        ]
+    }
+}
+
 @MainActor
 final class AppStoreTests: XCTestCase {
     func testProjectSelectionIsCappedAtTwenty() async {
@@ -264,14 +346,82 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(store.settings.statusCacheUpdatedAt, refreshedAt)
     }
 
+    func testMonitoringMissingTokenRetriesBeforeSetupAndDoesNotClearStoredToken() async throws {
+        let tokenStore = InMemoryTokenStore()
+        let store = makeStore(
+            notificationRouter: NotificationSpyRouter(granted: true),
+            client: MissingTokenRefreshMockVercelClient(),
+            tokenStore: tokenStore
+        )
+
+        let didConnect = await store.updateToken("token_live")
+        XCTAssertTrue(didConnect)
+
+        store.toggleProjectSelection("proj_1")
+        store.updateWatchedProjects()
+        XCTAssertEqual(store.phase, .running)
+        store.monitorTask?.cancel()
+        store.monitorTask = nil
+
+        _ = await store.performRefreshCycle()
+        XCTAssertEqual(store.phase, .running)
+        XCTAssertTrue(store.isAuthRetrying)
+        XCTAssertNil(store.tokenError)
+        XCTAssertEqual(try tokenStore.readToken(), "token_live")
+
+        _ = await store.performRefreshCycle()
+        XCTAssertEqual(store.phase, .running)
+        XCTAssertTrue(store.isAuthRetrying)
+
+        _ = await store.performRefreshCycle()
+        XCTAssertEqual(store.phase, .setupRequired)
+        XCTAssertEqual(store.tokenError, "Saved token is unavailable. Reconnect your Vercel token.")
+        XCTAssertEqual(try tokenStore.readToken(), "token_live")
+    }
+
+    func testBootstrapRetriesTransientValidationBeforeConnecting() async throws {
+        let tokenStore = InMemoryTokenStore()
+        try tokenStore.saveToken("token_live")
+
+        let settingsStore = InMemorySettingsStore()
+        try settingsStore.save(
+            AppSettings(
+                watchedProjects: [
+                    WatchedProject(id: "proj_1", name: "Website", teamId: nil, teamSlug: nil)
+                ],
+                selectedScope: .personal
+            )
+        )
+
+        let originalRetryDelays = DeployBarAppStore.startupAuthRetryDelays
+        DeployBarAppStore.startupAuthRetryDelays = [0.01]
+        defer { DeployBarAppStore.startupAuthRetryDelays = originalRetryDelays }
+
+        let store = makeStore(
+            notificationRouter: NotificationSpyRouter(granted: true),
+            client: FlakyStartupAuthMockVercelClient(remainingValidationFailures: 1),
+            tokenStore: tokenStore,
+            settingsStore: settingsStore
+        )
+
+        await store.bootstrap()
+
+        XCTAssertNotNil(store.authUser)
+        XCTAssertFalse(store.isAuthRetrying)
+        XCTAssertEqual(store.phase, .running)
+        XCTAssertEqual(store.authConnectionState, .connected)
+
+        store.enterSetupRequiredState()
+    }
+
     private func makeStore(
         notificationRouter: NotificationRouting,
         launchAtLogin: LaunchAtLoginControlling = InMemoryLaunchAtLoginController(),
-        client: VercelClient = MockVercelClient()
+        client: VercelClient = MockVercelClient(),
+        tokenStore: SecureTokenStore = InMemoryTokenStore(),
+        settingsStore: SettingsStore = InMemorySettingsStore(),
+        eventStore: DeploymentEventStore = InMemoryEventStore()
     ) -> DeployBarAppStore {
-        let tokenStore = InMemoryTokenStore()
-        let settingsStore = InMemorySettingsStore()
-        let eventStore = InMemoryEventStore()
         let sound = InMemorySoundPlayer()
         let engine = MonitoringEngine(client: client)
 

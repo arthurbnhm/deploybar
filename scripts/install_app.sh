@@ -8,12 +8,13 @@ DIST_DIR="$ROOT/dist"
 APP_DIR="$DIST_DIR/$BUNDLE_NAME"
 BUILD_DIR="$ROOT/.build/arm64-apple-macosx/release"
 BINARY_PATH="$BUILD_DIR/$APP_NAME"
-WEB_ICON_SVG="$ROOT/website/public/favicon.svg"
+APP_ICON_SVG="$ROOT/scripts/app-icon.svg"
 ICONSET_DIR="$DIST_DIR/AppIcon.iconset"
 APP_ICON_ICNS="$APP_DIR/Contents/Resources/AppIcon.icns"
-ICON_SAFE_AREA_PERCENT=84
 SIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
 SIGN_ENTITLEMENTS="${CODESIGN_ENTITLEMENTS:-}"
+APP_VERSION="${APP_VERSION:-0.1.0}"
+BUILD_VERSION="${BUILD_VERSION:-$(date +%Y%m%d%H%M%S)}"
 
 TARGET_DIR="$HOME/Applications"
 if [[ "${1:-}" == "--system" ]]; then
@@ -38,26 +39,20 @@ mkdir -p "$DIST_DIR"
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 
-if [[ ! -f "$WEB_ICON_SVG" ]]; then
-  echo "Expected website icon not found at $WEB_ICON_SVG" >&2
+if [[ ! -f "$APP_ICON_SVG" ]]; then
+  echo "Expected app icon not found at $APP_ICON_SVG" >&2
   exit 1
 fi
 
 rm -rf "$ICONSET_DIR"
 mkdir -p "$ICONSET_DIR"
 for size in 16 32 128 256 512; do
-  inner_size=$((size * ICON_SAFE_AREA_PERCENT / 100))
-  sips -s format png --resampleHeightWidth "$inner_size" "$inner_size" \
-    "$WEB_ICON_SVG" --out "$ICONSET_DIR/icon_${size}x${size}.png" >/dev/null
-  sips -p "$size" "$size" "$ICONSET_DIR/icon_${size}x${size}.png" \
-    --out "$ICONSET_DIR/icon_${size}x${size}.png" >/dev/null
+  sips -s format png --resampleHeightWidth "$size" "$size" \
+    "$APP_ICON_SVG" --out "$ICONSET_DIR/icon_${size}x${size}.png" >/dev/null
 
   retina_size=$((size * 2))
-  retina_inner_size=$((retina_size * ICON_SAFE_AREA_PERCENT / 100))
-  sips -s format png --resampleHeightWidth "$retina_inner_size" "$retina_inner_size" \
-    "$WEB_ICON_SVG" --out "$ICONSET_DIR/icon_${size}x${size}@2x.png" >/dev/null
-  sips -p "$retina_size" "$retina_size" "$ICONSET_DIR/icon_${size}x${size}@2x.png" \
-    --out "$ICONSET_DIR/icon_${size}x${size}@2x.png" >/dev/null
+  sips -s format png --resampleHeightWidth "$retina_size" "$retina_size" \
+    "$APP_ICON_SVG" --out "$ICONSET_DIR/icon_${size}x${size}@2x.png" >/dev/null
 done
 iconutil -c icns "$ICONSET_DIR" -o "$APP_ICON_ICNS"
 rm -rf "$ICONSET_DIR"
@@ -80,9 +75,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.1.0</string>
+  <string>$APP_VERSION</string>
   <key>CFBundleVersion</key>
-  <string>1</string>
+  <string>$BUILD_VERSION</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>NSHighResolutionCapable</key>

@@ -27,8 +27,7 @@ final class SettingsWindowOpener {
 
 final class DeployBarAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_: Notification) {
-        if let iconPath = Bundle.main.path(forResource: "AppIcon", ofType: "icns"),
-           let iconImage = NSImage(contentsOfFile: iconPath) {
+        if let iconImage = DeployBarBrand.appIconImage() {
             NSApp.applicationIconImage = iconImage
         }
 

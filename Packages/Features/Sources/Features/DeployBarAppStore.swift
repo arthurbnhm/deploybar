@@ -10,14 +10,23 @@ public enum AppPhase: Equatable {
     case unsupported(String)
 }
 
+public enum AuthConnectionState: Equatable {
+    case loading
+    case connected
+    case retrying(reason: String)
+    case setupRequired(reason: String?)
+}
+
 @MainActor
 @Observable
 public final class DeployBarAppStore {
     static let testNotificationTitle = "DeployBar Notifications Enabled"
     static let testNotificationBodyPrefix = "You will now receive deployment status updates."
     static let tokenHelpURL = URL(string: "https://vercel.com/account/settings/tokens")!
+    static let defaultTokenPrompt = "Paste a Vercel access token to continue."
 
     public internal(set) var phase: AppPhase = .loading
+    public internal(set) var authConnectionState: AuthConnectionState = .loading
     public internal(set) var authUser: AuthUser?
     public var tokenError: String?
     public var tokenNotice: String?
@@ -50,6 +59,7 @@ public final class DeployBarAppStore {
     let env: DeployBarEnvironment
     var monitorTask: Task<Void, Never>?
     var hasStarted = false
+    var consecutiveTransientAuthFailures = 0
 
     public init(environment: DeployBarEnvironment) {
         self.env = environment
@@ -64,7 +74,10 @@ public final class DeployBarAppStore {
     }
 
     public var hasValidAuth: Bool {
-        authUser != nil
+        if case .connected = authConnectionState {
+            return authUser != nil
+        }
+        return false
     }
 
     public var hasWatchedProjects: Bool {
@@ -76,7 +89,10 @@ public final class DeployBarAppStore {
     }
 
     public var requiresSetup: Bool {
-        phase == .setupRequired
+        if case .setupRequired = authConnectionState {
+            return true
+        }
+        return phase == .setupRequired
     }
 
     public var isCachedStatusStale: Bool {
@@ -84,5 +100,32 @@ public final class DeployBarAppStore {
             return false
         }
         return cachedStatusAge > 120
+    }
+
+    public var isAuthRetrying: Bool {
+        if case .retrying = authConnectionState {
+            return true
+        }
+        return false
+    }
+
+    public var shouldPromptForTokenInput: Bool {
+        if case .setupRequired = authConnectionState {
+            return true
+        }
+        return phase == .setupRequired
+    }
+
+    public var authStatusMessage: String? {
+        switch authConnectionState {
+        case .loading:
+            return "Checking saved Vercel token..."
+        case .connected:
+            return nil
+        case let .retrying(reason):
+            return reason
+        case let .setupRequired(reason):
+            return reason
+        }
     }
 }

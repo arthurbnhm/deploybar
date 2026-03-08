@@ -7,43 +7,12 @@ export function LogoIcon({ className = "w-8 h-8" }: { className?: string }) {
       className={className}
       aria-hidden="true"
     >
-      <defs>
-        <linearGradient id="logo-tile" x1="18" y1="14" x2="110" y2="116" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#F7F8FA" />
-          <stop offset="1" stopColor="#E9EDF3" />
-        </linearGradient>
-        <linearGradient id="logo-triangle" x1="43" y1="28" x2="94" y2="93" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#C7A3FF" />
-          <stop offset="0.52" stopColor="#7B78FF" />
-          <stop offset="1" stopColor="#3B57F4" />
-        </linearGradient>
-        <radialGradient id="logo-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(60 46) rotate(32) scale(44 34)">
-          <stop stopColor="#F8F0FF" stopOpacity="0.95" />
-          <stop offset="1" stopColor="#F8F0FF" stopOpacity="0" />
-        </radialGradient>
-        <path id="logo-triangle-shape" d="M64 31L95 88H33L64 31Z" />
-        <clipPath id="logo-triangle-clip">
-          <use href="#logo-triangle-shape" />
-        </clipPath>
-      </defs>
-
-      <rect x="6" y="6" width="116" height="116" rx="30" fill="url(#logo-tile)" />
-      <rect x="6.5" y="6.5" width="115" height="115" rx="29.5" stroke="#D4DAE4" />
-
-      <g transform="translate(0 2)">
-        <ellipse cx="64" cy="89" rx="26" ry="9" fill="#4B5EED" fillOpacity="0.22" />
-        <use href="#logo-triangle-shape" fill="url(#logo-triangle)" />
-        <ellipse cx="57" cy="52" rx="30" ry="20" fill="url(#logo-glow)" clipPath="url(#logo-triangle-clip)" />
-        <ellipse cx="66" cy="82" rx="24" ry="9" fill="#2739B8" fillOpacity="0.16" clipPath="url(#logo-triangle-clip)" />
-        <use
-          href="#logo-triangle-shape"
-          fill="none"
-          stroke="#EBDFFF"
-          strokeOpacity="0.42"
-          strokeWidth="2.2"
-          strokeLinejoin="round"
-        />
-      </g>
+      <rect x="8" y="8" width="112" height="112" rx="26" fill="white" />
+      <rect x="9" y="9" width="110" height="110" rx="25" stroke="#D9D9DE" strokeWidth="2" />
+      <path
+        d="M64 41.5C65.4 41.5 66.7 42.3 67.4 43.5L84.8 76.2C85.5 77.5 85.5 79.3 84.8 80.6C84.1 81.9 82.8 82.7 81.3 82.7H46.7C45.2 82.7 43.9 81.9 43.2 80.6C42.5 79.3 42.5 77.5 43.2 76.2L60.6 43.5C61.3 42.3 62.6 41.5 64 41.5Z"
+        fill="#1F1F22"
+      />
     </svg>
   );
 }
