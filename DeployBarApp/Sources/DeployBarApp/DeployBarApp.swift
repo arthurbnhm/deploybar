@@ -3,8 +3,8 @@ import Features
 import SwiftUI
 
 @MainActor
-final class SettingsWindowOpener {
-    static let shared = SettingsWindowOpener()
+final class SettingsPresenter {
+    static let shared = SettingsPresenter()
 
     private var openAction: (() -> Void)?
 
@@ -14,13 +14,8 @@ final class SettingsWindowOpener {
         openAction = action
     }
 
-    func openSettingsWindow() {
-        if let existing = NSApp.windows.first(where: { $0.title.localizedCaseInsensitiveContains(DeployBarWindow.settings.titleHint) }) {
-            existing.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-
+    func present() {
+        NSApp.activate()
         openAction?()
     }
 }
@@ -31,8 +26,7 @@ final class DeployBarAppDelegate: NSObject, NSApplicationDelegate {
             NSApp.applicationIconImage = iconImage
         }
 
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.setActivationPolicy(.accessory)
     }
 
     func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -41,7 +35,7 @@ final class DeployBarAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         Task { @MainActor in
-            SettingsWindowOpener.shared.openSettingsWindow()
+            SettingsPresenter.shared.present()
         }
         return true
     }
@@ -68,65 +62,37 @@ struct DeployBarMainApp: App {
             MenuBarContentView(store: store)
         } label: {
             MenuBarLabelView(aggregateStatus: store.aggregateStatus)
-                .background(SettingsWindowBridgeView())
-                .background(SetupRequiredBridgeView(store: store))
+                .background(SettingsBridgeView(store: store))
         }
         .menuBarExtraStyle(.window)
 
-        Window("DeployBar Settings", id: DeployBarWindow.settings.rawValue) {
+        Settings {
             DeployBarSettingsView(store: store)
         }
-        .windowResizability(.contentSize)
-        .defaultSize(width: 520, height: 490)
-        .deployBarWindowChrome()
 
         Window("Deployment Logs", id: DeployBarWindow.logs.rawValue) {
             LogsView(store: store)
         }
         .defaultSize(width: 860, height: 560)
         .defaultPosition(.center)
-        .deployBarWindowChrome()
-        .commands {
-            SettingsCommands()
-        }
+        .windowResizability(.contentMinSize)
+        .restorationBehavior(.disabled)
     }
 }
 
-private struct SettingsCommands: Commands {
-    @Environment(\.openWindow) private var openWindow
-
-    var body: some Commands {
-        CommandGroup(replacing: .appSettings) {
-            Button("Settings...") {
-                presentWindow(.settings, openWindow: openWindow)
-            }
-            .keyboardShortcut(",", modifiers: .command)
-        }
-    }
-}
-
-private struct SettingsWindowBridgeView: View {
-    @Environment(\.openWindow) private var openWindow
-
-    var body: some View {
-        Color.clear
-            .frame(width: 0, height: 0)
-            .onAppear {
-                SettingsWindowOpener.shared.register {
-                    presentWindow(.settings, openWindow: openWindow)
-                }
-            }
-    }
-}
-
-private struct SetupRequiredBridgeView: View {
+/// Bridges the app delegate and setup flow to the SwiftUI `openSettings` action,
+/// which is only reachable from inside the view hierarchy.
+private struct SettingsBridgeView: View {
     let store: DeployBarAppStore
-    @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
     @State private var didPresentForCurrentNeed = false
 
     var body: some View {
         Color.clear
             .frame(width: 0, height: 0)
+            .onAppear {
+                SettingsPresenter.shared.register { openSettings() }
+            }
             .task {
                 presentSettingsIfNeeded()
             }
@@ -145,12 +111,7 @@ private struct SetupRequiredBridgeView: View {
         }
 
         didPresentForCurrentNeed = true
-        presentWindow(.settings, openWindow: openWindow)
-    }
-}
-
-private extension Scene {
-    func deployBarWindowChrome() -> some Scene {
-        windowToolbarStyle(.unified(showsTitle: false))
+        NSApp.activate()
+        openSettings()
     }
 }

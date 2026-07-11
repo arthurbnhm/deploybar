@@ -4,7 +4,7 @@ DeployBar is a native macOS menu bar app for monitoring Vercel production deploy
 
 ## Highlights
 
-- Native SwiftUI + AppKit material styling
+- Native SwiftUI with the macOS 26 Liquid Glass design language
 - Token-only Vercel auth (stored in macOS Keychain)
 - Personal and team scope project selection (up to 20 projects)
 - Dynamic menu bar status icon
@@ -12,12 +12,13 @@ DeployBar is a native macOS menu bar app for monitoring Vercel production deploy
 - Local notifications and subtle sound effects
 - Embedded deployment event logs
 - Local-only persistence (settings JSON + SQLite cache)
+- One-click disconnect for clearing token, settings, cached statuses, and local logs
 
 ## Requirements
 
-- macOS 15+
+- macOS 26+ (Tahoe)
 - Apple Silicon (`arm64`) target for V1
-- Xcode 16+ / Swift 6+
+- Xcode 26+ / Swift 6.2+
 
 ## Download
 
@@ -28,13 +29,68 @@ For end users, download the latest app build from GitHub Releases:
 After downloading:
 
 1. Move `DeployBar.app` to `/Applications` (or `~/Applications`).
-2. Open DeployBar and approve Keychain access when prompted.
+2. Open DeployBar and approve the first token save if macOS asks.
+
+Release builds should be Developer ID signed and notarized. Do not publish
+ad-hoc or local-development signed app bundles as GitHub Releases.
 
 ## Build
 
 ```bash
 swift build
 ```
+
+## Install Locally
+
+DeployBar stores its Vercel token in Keychain, so local installs should be signed
+with a stable identity. If you have an Apple signing certificate, the installer
+will pick it automatically:
+
+```bash
+./scripts/install_app.sh
+```
+
+If you do not have an Apple Developer certificate, create a local code-signing
+identity once:
+
+```bash
+./scripts/create_dev_codesign_identity.sh
+./scripts/install_app.sh
+```
+
+The first install after creating this identity may ask whether `codesign` can use
+the new private key. Choose `Always Allow` so future local installs can sign
+without asking again.
+
+Ad-hoc signing is available only as an explicit one-off fallback:
+
+```bash
+ALLOW_ADHOC_SIGNING=1 ./scripts/install_app.sh
+```
+
+## Package a Public Release
+
+Public downloads need a Developer ID Application certificate and Apple
+notarization so Gatekeeper and Keychain can validate the app identity.
+
+Create a notarytool profile once:
+
+```bash
+xcrun notarytool store-credentials deploybar-notary \
+  --apple-id you@example.com \
+  --team-id TEAMID \
+  --password app-specific-password
+```
+
+Then create the release zip:
+
+```bash
+NOTARY_PROFILE=deploybar-notary ./scripts/package_release.sh
+```
+
+The release script refuses to run without a `Developer ID Application` signing
+identity. `SKIP_NOTARIZATION=1` is only for local packaging checks and must not
+be uploaded for users.
 
 ## Test
 
@@ -81,12 +137,17 @@ DeployBar stores your Vercel token in macOS Keychain under `com.deploybar.token`
 
 If macOS keeps asking for Keychain access:
 
-1. Choose `Always Allow` in the Keychain prompt (not just `Allow`).
+1. Make sure the app is signed with a stable identity. Rebuilt ad-hoc apps look
+   like different apps to Keychain.
 2. Use one installed app location (`~/Applications/DeployBar.app` or `/Applications/DeployBar.app`).
-3. Prefer signing with a stable identity when installing during development:
+3. After changing from ad-hoc to stable signing, approve the existing Keychain
+   item once with `Always Allow` so Keychain updates its trust entry.
 
 ```bash
-CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" ./scripts/install_app.sh
+./scripts/create_dev_codesign_identity.sh
+./scripts/install_app.sh
 ```
 
-Using ad-hoc signatures (`-`) may trigger repeated Keychain trust prompts after app updates.
+Apple explains that if an already trusted app changes, Keychain may ask you to
+authorize it again. Stable code signing gives Keychain a durable app identity
+across rebuilds.

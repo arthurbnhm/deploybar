@@ -5,24 +5,29 @@ import SwiftUI
 public struct MenuBarContentView: View {
     let store: DeployBarAppStore
     @Environment(\.openWindow) private var openWindow
-    @State private var expandedReadyActionsProjectID: String?
+    @Environment(\.openSettings) private var openSettings
+    @State private var expandedActionsProjectID: String?
 
     public init(store: DeployBarAppStore) {
         self.store = store
     }
 
+    /// Used by previews and snapshot tests to render the expanded actions state.
+    init(store: DeployBarAppStore, initiallyExpandedProjectID: String?) {
+        self.store = store
+        _expandedActionsProjectID = State(initialValue: initiallyExpandedProjectID)
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-                .padding(.horizontal, 14)
-                .padding(.top, 12)
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
                 .padding(.bottom, 10)
-
-            SubtleDivider()
 
             if store.requiresSetup {
                 setupPrompt
-                    .padding(14)
+                    .padding(.horizontal, 12)
             } else {
                 projectList
             }
@@ -30,16 +35,14 @@ public struct MenuBarContentView: View {
             if let error = store.monitorError {
                 ErrorInlineBanner(message: error)
                     .padding(.horizontal, 12)
-                    .padding(.bottom, 8)
+                    .padding(.top, 6)
             }
 
-            SubtleDivider()
-
             footer
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
         }
-        .frame(width: 420)
+        .frame(width: DesignSystem.popoverWidth)
         .onAppear { store.setMenuOpen(true) }
         .onDisappear { store.setMenuOpen(false) }
     }
@@ -48,22 +51,22 @@ public struct MenuBarContentView: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("DeployBar")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.headline)
 
                 Text(headerSubtitle)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
 
             Spacer()
 
             HStack(spacing: 6) {
                 Text(store.aggregateStatus.label)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
 
                 Image(systemName: store.aggregateStatus.symbolName)
-                    .font(.system(size: 16))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(store.aggregateStatus.tint)
                     .symbolEffect(.pulse, isActive: store.aggregateStatus == .building)
             }
@@ -71,64 +74,39 @@ public struct MenuBarContentView: View {
     }
 
     private var setupPrompt: some View {
-        AppCard {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(store.authStatusMessage ?? "Finish setup in Projects settings to start monitoring your Vercel production deploys.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            Text(store.authStatusMessage ?? "Connect your Vercel account in Settings to start monitoring production deploys.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-                Button("Open Projects Settings") {
-                    presentWindow(.settings, openWindow: openWindow)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+            Button("Open Settings") {
+                openSettingsWindow()
             }
+            .buttonStyle(.glassProminent)
+            .controlSize(.small)
         }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quinary, in: .rect(cornerRadius: DesignSystem.cornerRadius))
     }
 
     @ViewBuilder
     private var projectList: some View {
         if !store.hasConfiguredProjects {
-            VStack(spacing: 8) {
-                Image(systemName: "tray")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.tertiary)
-                Text("No projects configured")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 24)
+            emptyState(systemImage: "tray", message: "No projects configured")
         } else if !store.projectStatuses.isEmpty {
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 if store.isAuthRetrying {
-                    HStack(spacing: 6) {
-                        ProgressView()
-                            .controlSize(.mini)
-
-                        Text(store.authStatusMessage ?? "Reconnecting authentication...")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-
-                        Spacer()
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.top, 6)
+                    NoticeStrip(
+                        systemImage: "arrow.triangle.2.circlepath",
+                        message: store.authStatusMessage ?? "Reconnecting authentication…",
+                        showsSpinner: true
+                    )
                 }
 
                 if let cacheMessage {
-                    HStack(spacing: 6) {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                        Text(cacheMessage)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.top, 6)
+                    NoticeStrip(systemImage: "clock.arrow.circlepath", message: cacheMessage)
                 }
 
                 ScrollView {
@@ -138,16 +116,17 @@ public struct MenuBarContentView: View {
 
                             Group {
                                 if isExpanded {
-                                    ReadyDeploymentActionsRow(
+                                    DeploymentActionsRow(
                                         projectName: status.project.name,
                                         onViewLogs: { openLogs(for: status) },
                                         onOpenOnline: { openOnline(for: status) },
                                         onOpenDashboard: { openDashboard(for: status) },
                                         onCollapse: {
                                             withAnimation(.snappy(duration: 0.18)) {
-                                                expandedReadyActionsProjectID = nil
+                                                expandedActionsProjectID = nil
                                             }
                                         },
+                                        canOpenOnline: status.snapshot?.url != nil,
                                         canOpenDashboard: projectDashboardURL(for: status) != nil
                                     )
                                     .id("\(status.id)-actions")
@@ -161,85 +140,86 @@ public struct MenuBarContentView: View {
                                 }
                             }
                             .contextMenu {
-                                if status.snapshot?.stage == .ready {
+                                if let stage = status.snapshot?.stage, stage == .ready || stage == .failed {
                                     Button("View Logs") { openLogs(for: status) }
-                                    Button("Open Online") { openOnline(for: status) }
+                                    if status.snapshot?.url != nil {
+                                        Button("Open Online") { openOnline(for: status) }
+                                    }
                                     if projectDashboardURL(for: status) != nil {
                                         Button("Open Dashboard") { openDashboard(for: status) }
                                     }
-                                } else if status.snapshot?.stage == .failed {
-                                    Button("View Logs") { openLogs(for: status) }
                                 }
                             }
-                            .animation(.snappy(duration: 0.22), value: expandedReadyActionsProjectID)
+                            .animation(.snappy(duration: 0.22), value: expandedActionsProjectID)
                         }
                     }
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 4)
                 }
-                .frame(maxHeight: 340)
+                .frame(maxHeight: 360)
             }
         } else if store.isInitialRefreshInFlight {
-            VStack(spacing: 8) {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Syncing deployments…")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 24)
+            loadingState(message: "Syncing deployments…")
         } else if store.hasCompletedInitialRefresh {
-            VStack(spacing: 8) {
-                Image(systemName: "clock.badge.questionmark")
-                    .font(.system(size: 18))
-                    .foregroundStyle(.tertiary)
-                Text("No deployments yet")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 24)
+            emptyState(systemImage: "clock.badge.questionmark", message: "No deployments yet")
         } else {
-            VStack(spacing: 8) {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Loading deployments…")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 24)
+            loadingState(message: "Loading deployments…")
         }
     }
 
+    private func emptyState(systemImage: String, message: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.system(size: 20))
+                .foregroundStyle(.tertiary)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+    }
+
+    private func loadingState(message: String) -> some View {
+        VStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+    }
+
     private var footer: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 2) {
             Button {
                 store.manualRefresh()
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
-            .controlSize(.small)
+            .keyboardShortcut("r", modifiers: .command)
 
             Spacer()
 
             Button {
-                presentWindow(.settings, openWindow: openWindow)
+                openSettingsWindow()
             } label: {
                 Label("Settings", systemImage: "gearshape")
             }
-            .controlSize(.small)
+            .keyboardShortcut(",", modifiers: .command)
 
             Button {
                 NSApp.terminate(nil)
             } label: {
-                Label("Quit", systemImage: "xmark.circle")
+                Label("Quit", systemImage: "power")
             }
-            .controlSize(.small)
+            .keyboardShortcut("q", modifiers: .command)
         }
-        .buttonStyle(.borderless)
-        .font(.system(size: 12))
+        .buttonStyle(.accessoryBar)
     }
 
     private var headerSubtitle: String {
@@ -316,38 +296,39 @@ public struct MenuBarContentView: View {
         }
 
         switch snapshot.stage {
-        case .ready:
+        case .ready, .failed:
             withAnimation(.snappy(duration: 0.2)) {
-                if expandedReadyActionsProjectID == status.id {
-                    expandedReadyActionsProjectID = nil
+                if expandedActionsProjectID == status.id {
+                    expandedActionsProjectID = nil
                 } else {
-                    expandedReadyActionsProjectID = status.id
+                    expandedActionsProjectID = status.id
                 }
             }
-        case .failed:
-            expandedReadyActionsProjectID = nil
-            openLogs(for: status)
         default:
-            expandedReadyActionsProjectID = nil
-            break
+            expandedActionsProjectID = nil
         }
     }
 
     private func shouldShowInlineActions(for status: ProjectStatus) -> Bool {
-        guard status.snapshot?.stage == .ready else {
+        guard let stage = status.snapshot?.stage, stage == .ready || stage == .failed else {
             return false
         }
-        return expandedReadyActionsProjectID == status.id
+        return expandedActionsProjectID == status.id
+    }
+
+    private func openSettingsWindow() {
+        NSApp.activate()
+        openSettings()
     }
 
     private func openLogs(for status: ProjectStatus) {
-        expandedReadyActionsProjectID = nil
+        expandedActionsProjectID = nil
         Task { await store.openLogs(for: status) }
         presentWindow(.logs, openWindow: openWindow)
     }
 
     private func openOnline(for status: ProjectStatus) {
-        expandedReadyActionsProjectID = nil
+        expandedActionsProjectID = nil
         guard let url = status.snapshot?.url else {
             return
         }
@@ -355,7 +336,7 @@ public struct MenuBarContentView: View {
     }
 
     private func openDashboard(for status: ProjectStatus) {
-        expandedReadyActionsProjectID = nil
+        expandedActionsProjectID = nil
         guard let url = projectDashboardURL(for: status) else {
             return
         }
@@ -371,20 +352,60 @@ public struct MenuBarContentView: View {
     }
 }
 
-private struct ReadyDeploymentActionsRow: View {
+/// Compact relative timestamp ("45 min. ago") that refreshes once a minute.
+private struct RelativeTimeText: View {
+    let date: Date
+
+    var body: some View {
+        TimelineView(.everyMinute) { _ in
+            Text(date, format: .relative(presentation: .named, unitsStyle: .abbreviated))
+        }
+    }
+}
+
+private struct NoticeStrip: View {
+    let systemImage: String
+    let message: String
+    var showsSpinner: Bool = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if showsSpinner {
+                ProgressView()
+                    .controlSize(.mini)
+            } else {
+                Image(systemName: systemImage)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(message)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 2)
+    }
+}
+
+private struct DeploymentActionsRow: View {
     let projectName: String
     let onViewLogs: () -> Void
     let onOpenOnline: () -> Void
     let onOpenDashboard: () -> Void
     let onCollapse: () -> Void
+    let canOpenOnline: Bool
     let canOpenDashboard: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Button(action: onCollapse) {
                 HStack(spacing: 8) {
                     Text(projectName)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.body.weight(.semibold))
                         .lineLimit(1)
 
                     Spacer(minLength: 6)
@@ -392,50 +413,48 @@ private struct ReadyDeploymentActionsRow: View {
                     Image(systemName: "xmark")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(.secondary)
-                        .frame(width: 16, height: 16)
-                        .background(
-                            Circle()
-                                .fill(DesignSystem.actionButtonFill)
-                        )
+                        .frame(width: 18, height: 18)
+                        .background(.quaternary, in: .circle)
                 }
-                .contentShape(Rectangle())
+                .contentShape(.rect)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Collapse actions for \(projectName)")
 
-            HStack(spacing: 8) {
-                ActionPillButton(
-                    title: "Logs",
-                    systemImage: "doc.text.magnifyingglass",
-                    isPrimary: true,
-                    action: onViewLogs
-                )
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    Button {
+                        onViewLogs()
+                    } label: {
+                        Label("Logs", systemImage: "doc.text.magnifyingglass")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.glassProminent)
 
-                ActionPillButton(
-                    title: "Online",
-                    systemImage: "globe",
-                    action: onOpenOnline
-                )
+                    Button {
+                        onOpenOnline()
+                    } label: {
+                        Label("Online", systemImage: "globe")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.glass)
+                    .disabled(!canOpenOnline)
 
-                ActionPillButton(
-                    title: "Dashboard",
-                    systemImage: "rectangle.grid.2x2",
-                    isEnabled: canOpenDashboard,
-                    action: onOpenDashboard
-                )
+                    Button {
+                        onOpenDashboard()
+                    } label: {
+                        Label("Dashboard", systemImage: "rectangle.grid.2x2")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.glass)
+                    .disabled(!canOpenDashboard)
+                }
             }
+            .controlSize(.small)
         }
-        .padding(9)
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(DesignSystem.actionTrayFill)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .strokeBorder(DesignSystem.border, lineWidth: 0.5)
-        )
-        .padding(.horizontal, 10)
+        .background(.quinary, in: .rect(cornerRadius: DesignSystem.cornerRadius))
     }
 }
 
@@ -458,12 +477,12 @@ private struct ProjectStatusRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(status.project.name)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.body.weight(.medium))
                     .lineLimit(1)
 
                 if let message = status.snapshot?.commitMessage, !message.isEmpty {
                     Text(message)
-                        .font(.system(size: 11))
+                        .font(.subheadline)
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
@@ -475,97 +494,34 @@ private struct ProjectStatusRow: View {
                 StatusPill(stage: stage)
 
                 if let snapshot = status.snapshot {
-                    Text(snapshot.createdAt, style: .relative)
-                        .font(.system(size: 10))
+                    RelativeTimeText(date: snapshot.createdAt)
+                        .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
             }
 
-            if stage == .ready {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-            }
+            // Fixed slot so status pills stay trailing-aligned across all rows.
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.tertiary)
+                .opacity(canSelect ? 1 : 0)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(isHovered ? DesignSystem.rowHoverFill : Color.clear)
+            isHovered ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.clear),
+            in: .rect(cornerRadius: DesignSystem.rowCornerRadius)
         )
-        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contentShape(.rect(cornerRadius: DesignSystem.rowCornerRadius))
 
         if canSelect {
             Button(action: onSelect) { row }
                 .buttonStyle(.plain)
                 .onHover { isHovered = $0 }
-                .accessibilityHint("Opens actions for ready deployments or logs for failed deployments.")
+                .accessibilityHint("Shows deployment actions.")
         } else {
             row
                 .onHover { isHovered = $0 }
         }
-    }
-}
-
-private struct ActionPillButton: View {
-    let title: String
-    let systemImage: String
-    var isPrimary: Bool = false
-    var isEnabled: Bool = true
-    let action: () -> Void
-    @State private var isHovered = false
-
-    var body: some View {
-        Button {
-            action()
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 10, weight: .semibold))
-                Text(title)
-                    .font(.system(size: 11, weight: .semibold))
-            }
-            .foregroundStyle(foregroundColor)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .padding(.horizontal, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(backgroundColor)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(borderColor, lineWidth: 0.5)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .onHover { isHovered = $0 }
-        .accessibilityLabel(title)
-    }
-
-    private var foregroundColor: Color {
-        if !isEnabled {
-            return .secondary.opacity(0.65)
-        }
-        return isPrimary ? .accentColor : .primary
-    }
-
-    private var backgroundColor: Color {
-        if !isEnabled {
-            return DesignSystem.actionButtonFill.opacity(0.5)
-        }
-        if isPrimary {
-            return isHovered ? Color.accentColor.opacity(0.20) : Color.accentColor.opacity(0.14)
-        }
-        return isHovered ? DesignSystem.actionButtonHoverFill : DesignSystem.actionButtonFill
-    }
-
-    private var borderColor: Color {
-        if isPrimary {
-            return Color.accentColor.opacity(0.42)
-        }
-        return DesignSystem.border
     }
 }

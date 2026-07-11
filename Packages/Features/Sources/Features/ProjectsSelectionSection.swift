@@ -2,6 +2,8 @@ import Core
 import Observation
 import SwiftUI
 
+/// Emits the "Scope" and "Watched Projects" form sections.
+/// Place directly inside a `Form` (not wrapped in another `Section`).
 struct ProjectsSelectionSection: View {
     @Bindable var store: DeployBarAppStore
     let persistSelectionChanges: Bool
@@ -18,100 +20,86 @@ struct ProjectsSelectionSection: View {
     }
 
     var body: some View {
-        let buckets = projectBuckets()
+        if store.authUser == nil {
+            Section {
+                Label("Connect your Vercel account to load teams and projects.", systemImage: "key.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            let buckets = projectBuckets()
 
-        Group {
-            if store.authUser == nil {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Connect your Vercel token to load teams and projects.", systemImage: "key.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
+            Section {
+                Picker("Scope", selection: $store.selectedScope) {
+                    Text("Personal").tag(TeamScope.personal)
+                    ForEach(store.teams) { team in
+                        Text(team.name).tag(TeamScope.team(id: team.id, slug: team.slug))
+                    }
                 }
-            } else {
-                VStack(alignment: .leading, spacing: DesignSystem.sectionSpacing) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Scope")
-                                .font(.system(size: 13, weight: .semibold))
+                .pickerStyle(.menu)
+                .onChange(of: store.selectedScope) { _, _ in
+                    Task {
+                        await store.refreshProjectsForScope()
+                        if persistSelectionChanges {
+                            store.updateWatchedProjects()
+                        }
+                    }
+                }
+            } footer: {
+                Text("Choose which account or team to load projects from.")
+            }
 
-                            Spacer()
-
-                            Picker("Scope", selection: $store.selectedScope) {
-                                Text("Personal").tag(TeamScope.personal)
-                                ForEach(store.teams) { team in
-                                    Text(team.name).tag(TeamScope.team(id: team.id, slug: team.slug))
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .labelsHidden()
-                            .onChange(of: store.selectedScope) { _, _ in
-                                Task {
-                                    await store.refreshProjectsForScope()
-                                    if persistSelectionChanges {
-                                        store.updateWatchedProjects()
-                                    }
-                                }
+            Section {
+                if !buckets.watched.isEmpty {
+                    FlowLayout(spacing: 6) {
+                        ForEach(buckets.watched) { project in
+                            ProjectChip(name: project.name) {
+                                toggleProject(project.id)
                             }
                         }
+                    }
+                    .animation(.snappy(duration: 0.25), value: store.selectedProjectIDs)
+                    .padding(.vertical, 2)
+                }
 
-                        Text("Choose which account or team to load projects from.")
-                            .font(.system(size: 12))
+                if buckets.watched.isEmpty {
+                    if store.availableProjects.isEmpty {
+                        Label("No projects found for this scope.", systemImage: "tray")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Add at least one project to start monitoring.")
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
+                }
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text("Watched Projects")
-                                .font(.system(size: 13, weight: .semibold))
-                            Spacer()
-                            Text("\(store.selectedProjectIDs.count) / 20")
-                                .font(.system(size: 11, weight: .medium).monospacedDigit())
-                                .foregroundStyle(.secondary)
-                        }
-
-                        if !buckets.watched.isEmpty {
-                            FlowLayout(spacing: 6) {
-                                ForEach(buckets.watched) { project in
-                                    ProjectChip(name: project.name) {
-                                        toggleProject(project.id)
-                                    }
-                                }
-                            }
-                            .animation(.snappy(duration: 0.25), value: store.selectedProjectIDs)
-                        }
-
-                        if !buckets.unwatched.isEmpty {
-                            Button {
-                                projectSearchText = ""
-                                showProjectPicker.toggle()
-                            } label: {
-                                Label("Add Project", systemImage: "plus.circle.fill")
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                            .popover(isPresented: $showProjectPicker, arrowEdge: .bottom) {
-                                projectPickerPopover
-                            }
-                        }
-
-                        if buckets.watched.isEmpty {
-                            if store.availableProjects.isEmpty {
-                                Label("No projects found for this scope.", systemImage: "tray")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                Text("Add at least one project to start monitoring.")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        if store.selectedProjectIDs.count >= 20 {
-                            Text("Project limit reached. Remove one project before adding another.")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                        }
+                if !buckets.unwatched.isEmpty {
+                    Button {
+                        projectSearchText = ""
+                        showProjectPicker.toggle()
+                    } label: {
+                        Label("Add Project…", systemImage: "plus")
                     }
+                    .controlSize(.small)
+                    .popover(isPresented: $showProjectPicker, arrowEdge: .bottom) {
+                        projectPickerPopover
+                    }
+                }
+            } header: {
+                HStack {
+                    Text("Watched Projects")
+
+                    Spacer()
+
+                    Text("\(store.selectedProjectIDs.count) of 20")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            } footer: {
+                if store.selectedProjectIDs.count >= 20 {
+                    Text("Project limit reached. Remove one project before adding another.")
                 }
             }
         }
@@ -123,12 +111,12 @@ struct ProjectsSelectionSection: View {
         return VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundStyle(.tertiary)
 
-                TextField("Search projects...", text: $projectSearchText)
+                TextField("Search projects…", text: $projectSearchText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13))
+                    .font(.body)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -137,32 +125,16 @@ struct ProjectsSelectionSection: View {
 
             if filteredProjects.isEmpty {
                 Text(projectSearchText.isEmpty ? "All projects are watched." : "No matching projects.")
-                    .font(.system(size: 12))
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(16)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 2) {
                         ForEach(filteredProjects) { project in
-                            Button {
+                            ProjectPickerRow(name: project.name) {
                                 toggleProject(project.id)
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Text(project.name)
-                                        .font(.system(size: 13, weight: .medium))
-                                        .lineLimit(1)
-
-                                    Spacer()
-
-                                    Image(systemName: "plus.circle.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(.tint)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                     .padding(4)
@@ -223,6 +195,37 @@ private struct ProjectBuckets {
     let filteredUnwatched: [Project]
 }
 
+private struct ProjectPickerRow: View {
+    let name: String
+    let onAdd: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: onAdd) {
+            HStack(spacing: 8) {
+                Text(name)
+                    .font(.body.weight(.medium))
+                    .lineLimit(1)
+
+                Spacer()
+
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.tint)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                isHovered ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.clear),
+                in: .rect(cornerRadius: 6)
+            )
+            .contentShape(.rect(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+    }
+}
+
 struct ProjectChip: View {
     let name: String
     let onRemove: () -> Void
@@ -231,7 +234,7 @@ struct ProjectChip: View {
     var body: some View {
         HStack(spacing: 5) {
             Text(name)
-                .font(.system(size: 12, weight: .medium))
+                .font(.subheadline.weight(.medium))
                 .lineLimit(1)
 
             Button(action: onRemove) {
@@ -239,23 +242,17 @@ struct ProjectChip: View {
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.secondary)
                     .frame(width: 14, height: 14)
-                    .background(
-                        Circle()
-                            .fill(isHovered ? DesignSystem.chipCloseHoverFill : DesignSystem.chipCloseFill)
-                    )
+                    .background(.quaternary, in: .circle)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Remove \(name)")
         }
         .padding(.leading, 10)
         .padding(.trailing, 6)
-        .padding(.vertical, 6)
+        .padding(.vertical, 5)
         .background(
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(isHovered ? DesignSystem.chipHoverFill : DesignSystem.chipFill)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .strokeBorder(DesignSystem.chipBorder, lineWidth: 0.5)
+            isHovered ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.quinary),
+            in: .capsule
         )
         .onHover { isHovered = $0 }
     }

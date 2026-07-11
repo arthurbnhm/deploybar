@@ -2,24 +2,35 @@ import Core
 import SwiftUI
 
 public struct DeployBarSettingsView: View {
+    enum SettingsTab: Hashable {
+        case projects
+        case monitoring
+    }
+
     let store: DeployBarAppStore
+    @State private var selectedTab: SettingsTab
 
     public init(store: DeployBarAppStore) {
+        self.init(store: store, initialTab: .projects)
+    }
+
+    /// Used by previews and snapshot tests to render a specific pane.
+    init(store: DeployBarAppStore, initialTab: SettingsTab) {
         self.store = store
+        _selectedTab = State(initialValue: initialTab)
     }
 
     public var body: some View {
-        TabView {
-            Tab("Projects", systemImage: "shippingbox.fill") {
+        TabView(selection: $selectedTab) {
+            Tab("Projects", systemImage: "shippingbox.fill", value: .projects) {
                 ProjectsSettingsPane(store: store)
             }
 
-            Tab("Monitoring", systemImage: "waveform.path.ecg") {
+            Tab("Monitoring", systemImage: "waveform.path.ecg", value: .monitoring) {
                 MonitoringSettingsPane(store: store)
             }
         }
-        .frame(width: 520, height: 420)
-        .background(WindowAccessor())
+        .frame(width: 560, height: 520)
     }
 }
 
@@ -30,30 +41,15 @@ private struct ProjectsSettingsPane: View {
 
     var body: some View {
         Form {
-            Section {
-                HStack(spacing: 10) {
-                    Image(systemName: "triangle.fill")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(Color(red: 0.56, green: 0.56, blue: 0.58))
-
-                    Text("DeployBar")
-                        .font(.system(size: 20, weight: .bold))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-            }
-
-            Section {
+            Section("Vercel Account") {
                 TokenConnectionSection(store: store)
             }
 
-            Section {
-                ProjectsSelectionSection(
-                    store: store,
-                    persistSelectionChanges: true
-                )
-                .disabled(store.isValidatingToken)
-            }
+            ProjectsSelectionSection(
+                store: store,
+                persistSelectionChanges: true
+            )
+            .disabled(store.isValidatingToken)
         }
         .formStyle(.grouped)
     }
@@ -63,6 +59,7 @@ private struct TokenConnectionSection: View {
     let store: DeployBarAppStore
     @State private var tokenDraft = ""
     @State private var isEditingToken = false
+    @State private var showDisconnectConfirmation = false
     @FocusState private var tokenFieldFocused: Bool
 
     private var isConnected: Bool {
@@ -82,138 +79,135 @@ private struct TokenConnectionSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Vercel Connection")
-                .font(.system(size: 13, weight: .semibold))
+        if store.isAuthRetrying, !isConnected {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
 
-            if store.isAuthRetrying, !isConnected {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-
-                    Text(store.authStatusMessage ?? "Reconnecting to your saved token...")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.blue.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                Text(store.authStatusMessage ?? "Reconnecting to your saved token…")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
+        }
 
-            if isEditing {
-                VStack(alignment: .leading, spacing: 8) {
-                    SecureField("Paste your Vercel token...", text: $tokenDraft)
-                        .textFieldStyle(.roundedBorder)
-                        .focused($tokenFieldFocused)
+        if isEditing {
+            VStack(alignment: .leading, spacing: 10) {
+                SecureField("Access Token", text: $tokenDraft, prompt: Text("Paste your Vercel token…"))
+                    .textFieldStyle(.roundedBorder)
+                    .focused($tokenFieldFocused)
 
-                    HStack(spacing: 8) {
-                        Button {
-                            Task {
-                                let success = await store.updateToken(tokenDraft)
-                                if success {
-                                    tokenDraft = ""
-                                    isEditingToken = false
-                                } else {
-                                    tokenFieldFocused = true
-                                }
-                            }
-                        } label: {
-                            if store.isValidatingToken {
-                                ProgressView()
-                                    .controlSize(.small)
-                                    .frame(minWidth: 20)
-                            } else {
-                                Text(isConnected ? "Save Token" : "Connect Token")
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                        .disabled(submitDisabled)
-
-                        if isConnected {
-                            Button("Cancel") {
+                HStack(spacing: 8) {
+                    Button {
+                        Task {
+                            let success = await store.updateToken(tokenDraft)
+                            if success {
                                 tokenDraft = ""
                                 isEditingToken = false
+                            } else {
+                                tokenFieldFocused = true
                             }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                            .disabled(store.isValidatingToken)
+                        }
+                    } label: {
+                        if store.isValidatingToken {
+                            ProgressView()
+                                .controlSize(.small)
+                                .frame(minWidth: 20)
+                        } else {
+                            Text(isConnected ? "Save Token" : "Connect")
                         }
                     }
-                }
-            } else if let user = store.authUser {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.green)
-                        .padding(.top, 1)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(submitDisabled)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("@\(user.username)")
-                            .font(.system(size: 13, weight: .semibold))
-
-                        if let email = user.email {
-                            Text(email)
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
+                    if isConnected {
+                        Button("Cancel") {
+                            tokenDraft = ""
+                            isEditingToken = false
                         }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(store.isValidatingToken)
                     }
 
                     Spacer()
 
-                    VStack(alignment: .trailing, spacing: 8) {
-                        Text("Connected")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
+                    Link("Get your Vercel token", destination: DeployBarAppStore.tokenHelpURL)
+                        .font(.subheadline.weight(.medium))
+                }
+            }
+            .padding(.vertical, 2)
+            .onAppear {
+                tokenFieldFocused = true
+            }
+        } else if let user = store.authUser {
+            HStack(spacing: 12) {
+                Image(systemName: "person.crop.circle.fill.badge.checkmark")
+                    .font(.system(size: 26))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.green)
 
-                        Button("Change Token") {
-                            tokenDraft = ""
-                            isEditingToken = true
-                            tokenFieldFocused = true
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("@\(user.username)")
+                        .font(.body.weight(.semibold))
+
+                    if let email = user.email {
+                        Text(email)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
                 }
-            }
 
-            Link("Get your Vercel token", destination: DeployBarAppStore.tokenHelpURL)
-                .font(.system(size: 12, weight: .medium))
+                Spacer()
 
-            if let notice = store.tokenNotice {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.green)
-
-                    Text(notice)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                Button("Change Token…") {
+                    tokenDraft = ""
+                    isEditingToken = true
+                    tokenFieldFocused = true
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.green.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
+                .controlSize(.small)
 
-            if let error = store.tokenError {
-                ErrorInlineBanner(message: error)
+                Button("Disconnect…", role: .destructive) {
+                    showDisconnectConfirmation = true
+                }
+                .controlSize(.small)
+                .disabled(store.isValidatingToken)
+            }
+            .padding(.vertical, 2)
+            .confirmationDialog(
+                "Disconnect Vercel?",
+                isPresented: $showDisconnectConfirmation
+            ) {
+                Button("Disconnect and Clear Local Data", role: .destructive) {
+                    Task {
+                        await store.disconnectAccount()
+                        tokenDraft = ""
+                        isEditingToken = true
+                        tokenFieldFocused = true
+                    }
+                }
+
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This clears the saved token, selected projects, cached statuses, and local deployment logs.")
             }
         }
-        .onAppear {
-            if requiresTokenInput {
-                isEditingToken = true
-                tokenFieldFocused = true
+
+        if let notice = store.tokenNotice {
+            Label {
+                Text(notice)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            } icon: {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
             }
         }
-        .onChange(of: store.authUser?.id) { _, newID in
-            if newID == nil, requiresTokenInput {
-                isEditingToken = true
-                tokenFieldFocused = true
-            }
+
+        if let error = store.tokenError {
+            ErrorInlineBanner(message: error)
         }
     }
 }
@@ -315,25 +309,29 @@ private struct PollingProfileCard: View {
             VStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(isSelected ? tint : .secondary)
+                    .foregroundStyle(isSelected ? AnyShapeStyle(tint) : AnyShapeStyle(.secondary))
+                    .frame(height: 22)
 
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
 
                 Text(subtitle)
-                    .font(.system(size: 10))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isSelected ? tint.opacity(0.08) : isHovered ? Color.primary.opacity(0.03) : Color.clear)
+                isSelected
+                    ? AnyShapeStyle(tint.opacity(0.12))
+                    : isHovered ? AnyShapeStyle(.quinary) : AnyShapeStyle(.clear),
+                in: .rect(cornerRadius: DesignSystem.cornerRadius)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(isSelected ? tint.opacity(0.3) : Color.primary.opacity(0.06), lineWidth: isSelected ? 1.5 : 0.5)
+                RoundedRectangle(cornerRadius: DesignSystem.cornerRadius)
+                    .strokeBorder(tint.opacity(isSelected ? 0.5 : 0), lineWidth: 1.5)
             )
+            .contentShape(.rect(cornerRadius: DesignSystem.cornerRadius))
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }

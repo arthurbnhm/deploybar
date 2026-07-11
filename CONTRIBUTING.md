@@ -2,7 +2,7 @@
 
 ## Development Setup
 
-1. Install Xcode 16+.
+1. Install Xcode 26+.
 2. Clone repository.
 3. Run `swift build` and `swift test`.
 

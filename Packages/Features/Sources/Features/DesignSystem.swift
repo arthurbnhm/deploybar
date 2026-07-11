@@ -1,78 +1,16 @@
 import Core
-import AppKit
 import SwiftUI
 
+/// Layout metrics shared across DeployBar surfaces.
+///
+/// Colors and fills intentionally come from the system palette
+/// (`.quaternary`, `.quinary`, semantic `Color`s) so every surface adapts to
+/// appearance, vibrancy, and accessibility settings for free.
 enum DesignSystem {
-    static let cornerRadius: CGFloat = 12
-    static let cardPadding: CGFloat = 14
+    static let popoverWidth: CGFloat = 380
+    static let cornerRadius: CGFloat = 10
+    static let rowCornerRadius: CGFloat = 8
     static let sectionSpacing: CGFloat = 14
-
-    static let panelFill = dynamic(
-        light: NSColor.black.withAlphaComponent(0.035),
-        dark: NSColor.white.withAlphaComponent(0.075)
-    )
-    static let rowHoverFill = dynamic(
-        light: NSColor.black.withAlphaComponent(0.05),
-        dark: NSColor.white.withAlphaComponent(0.11)
-    )
-    static let rowSelectedFill = dynamic(
-        light: NSColor.black.withAlphaComponent(0.075),
-        dark: NSColor.white.withAlphaComponent(0.16)
-    )
-    static let border = dynamic(
-        light: NSColor.black.withAlphaComponent(0.08),
-        dark: NSColor.white.withAlphaComponent(0.16)
-    )
-    static let actionTrayFill = dynamic(
-        light: NSColor.black.withAlphaComponent(0.03),
-        dark: NSColor.white.withAlphaComponent(0.07)
-    )
-    static let actionButtonFill = dynamic(
-        light: NSColor.black.withAlphaComponent(0.045),
-        dark: NSColor.white.withAlphaComponent(0.10)
-    )
-    static let actionButtonHoverFill = dynamic(
-        light: NSColor.black.withAlphaComponent(0.08),
-        dark: NSColor.white.withAlphaComponent(0.17)
-    )
-
-    static let stepProgressTrack = dynamic(
-        light: NSColor.black.withAlphaComponent(0.08),
-        dark: NSColor.white.withAlphaComponent(0.14)
-    )
-
-    static let chipFill = dynamic(
-        light: NSColor.black.withAlphaComponent(0.06),
-        dark: NSColor.white.withAlphaComponent(0.08)
-    )
-    static let chipHoverFill = dynamic(
-        light: NSColor.black.withAlphaComponent(0.10),
-        dark: NSColor.white.withAlphaComponent(0.16)
-    )
-    static let chipCloseFill = dynamic(
-        light: NSColor.black.withAlphaComponent(0.06),
-        dark: NSColor.white.withAlphaComponent(0.14)
-    )
-    static let chipCloseHoverFill = dynamic(
-        light: NSColor.black.withAlphaComponent(0.12),
-        dark: NSColor.white.withAlphaComponent(0.22)
-    )
-    static let chipBorder = dynamic(
-        light: NSColor.black.withAlphaComponent(0.08),
-        dark: NSColor.white.withAlphaComponent(0.16)
-    )
-
-    private static func dynamic(light: NSColor, dark: NSColor) -> Color {
-        let dynamicColor = NSColor(name: nil) { appearance in
-            switch appearance.bestMatch(from: [.darkAqua, .aqua]) {
-            case .darkAqua?:
-                return dark
-            default:
-                return light
-            }
-        }
-        return Color(nsColor: dynamicColor)
-    }
 }
 
 extension DeploymentStage {
@@ -89,18 +27,12 @@ extension DeploymentStage {
 
     var tint: Color {
         switch self {
-        case .queued:
-            Color(red: 0.42, green: 0.55, blue: 0.94)
-        case .building:
-            Color(red: 0.96, green: 0.65, blue: 0.14)
-        case .ready:
-            Color(red: 0.20, green: 0.78, blue: 0.48)
-        case .failed:
-            Color(red: 0.94, green: 0.32, blue: 0.28)
-        case .canceled:
-            Color(red: 0.56, green: 0.56, blue: 0.58)
-        case .unknown:
-            Color.secondary
+        case .queued: .indigo
+        case .building: .orange
+        case .ready: .green
+        case .failed: .red
+        case .canceled: .gray
+        case .unknown: .secondary
         }
     }
 
@@ -128,10 +60,10 @@ extension AggregateStatus {
 
     var tint: Color {
         switch self {
-        case .healthy: Color(red: 0.20, green: 0.78, blue: 0.48)
-        case .building: Color(red: 0.96, green: 0.65, blue: 0.14)
-        case .failed: Color(red: 0.94, green: 0.32, blue: 0.28)
-        case .unknown: Color.secondary
+        case .healthy: .green
+        case .building: .orange
+        case .failed: .red
+        case .unknown: .gray
         }
     }
 

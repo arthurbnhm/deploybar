@@ -11,10 +11,15 @@ BINARY_PATH="$BUILD_DIR/$APP_NAME"
 APP_ICON_SVG="$ROOT/scripts/app-icon.svg"
 ICONSET_DIR="$DIST_DIR/AppIcon.iconset"
 APP_ICON_ICNS="$APP_DIR/Contents/Resources/AppIcon.icns"
-SIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
+SIGN_IDENTITY="${CODESIGN_IDENTITY:-}"
 SIGN_ENTITLEMENTS="${CODESIGN_ENTITLEMENTS:-}"
+CODESIGN_OPTIONS="${CODESIGN_OPTIONS:-}"
+CODESIGN_TIMESTAMP="${CODESIGN_TIMESTAMP:-0}"
 APP_VERSION="${APP_VERSION:-0.1.0}"
 BUILD_VERSION="${BUILD_VERSION:-$(date +%Y%m%d%H%M%S)}"
+ALLOW_ADHOC_SIGNING="${ALLOW_ADHOC_SIGNING:-0}"
+LOCAL_DEV_IDENTITY="${LOCAL_DEV_IDENTITY:-DeployBar Local Development}"
+SKIP_INSTALL="${SKIP_INSTALL:-0}"
 
 TARGET_DIR="$HOME/Applications"
 if [[ "${1:-}" == "--system" ]]; then
@@ -24,6 +29,55 @@ fi
 ALT_TARGET_DIR="/Applications"
 if [[ "$TARGET_DIR" == "/Applications" ]]; then
   ALT_TARGET_DIR="$HOME/Applications"
+fi
+
+select_signing_identity() {
+  local identities
+  identities="$(security find-identity -v -p codesigning 2>/dev/null || true)"
+
+  local patterns=(
+    "Developer ID Application:"
+    "Apple Distribution:"
+    "Apple Development:"
+    "$LOCAL_DEV_IDENTITY"
+  )
+
+  local pattern
+  for pattern in "${patterns[@]}"; do
+    local match
+    match="$(printf '%s\n' "$identities" | awk -F '"' -v pattern="$pattern" '$2 ~ pattern { print $2; exit }')"
+    if [[ -n "$match" ]]; then
+      printf '%s\n' "$match"
+      return 0
+    fi
+  done
+
+  printf '%s\n' "$identities" | awk -F '"' '/\) [A-F0-9]+ "/ { print $2; exit }'
+}
+
+if [[ -z "${CODESIGN_IDENTITY:-}" ]]; then
+  SIGN_IDENTITY="$(select_signing_identity)"
+fi
+
+if [[ -z "$SIGN_IDENTITY" ]]; then
+  if [[ "$ALLOW_ADHOC_SIGNING" == "1" ]]; then
+    SIGN_IDENTITY="-"
+  else
+    cat >&2 <<EOF
+No valid macOS code signing identity was found.
+
+Keychain permissions do not stick reliably across ad-hoc signed builds. Create a
+local development signing identity, then rerun this installer:
+
+  ./scripts/create_dev_codesign_identity.sh
+  ./scripts/install_app.sh
+
+For a one-off unsigned-style install, rerun with:
+
+  ALLOW_ADHOC_SIGNING=1 ./scripts/install_app.sh
+EOF
+    exit 1
+  fi
 fi
 
 echo "Building $APP_NAME (release, arm64)..."
@@ -79,7 +133,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
   <key>CFBundleVersion</key>
   <string>$BUILD_VERSION</string>
   <key>LSMinimumSystemVersion</key>
-  <string>14.0</string>
+  <string>26.0</string>
+  <key>LSUIElement</key>
+  <true/>
   <key>NSHighResolutionCapable</key>
   <true/>
 </dict>
@@ -92,12 +148,25 @@ chmod +x "$APP_DIR/Contents/MacOS/$APP_NAME"
 if [[ "$SIGN_IDENTITY" == "-" ]]; then
   echo "Signing with ad-hoc identity."
   echo "Note: ad-hoc signatures can trigger repeated Keychain access prompts after app updates."
+else
+  echo "Signing with identity: $SIGN_IDENTITY"
 fi
 
+codesign_args=(--force --deep --sign "$SIGN_IDENTITY")
+if [[ -n "$CODESIGN_OPTIONS" ]]; then
+  codesign_args+=(--options "$CODESIGN_OPTIONS")
+fi
+if [[ "$CODESIGN_TIMESTAMP" == "1" ]]; then
+  codesign_args+=(--timestamp)
+fi
 if [[ -n "$SIGN_ENTITLEMENTS" ]]; then
-  codesign --force --deep --sign "$SIGN_IDENTITY" --entitlements "$SIGN_ENTITLEMENTS" "$APP_DIR"
-else
-  codesign --force --deep --sign "$SIGN_IDENTITY" "$APP_DIR"
+  codesign_args+=(--entitlements "$SIGN_ENTITLEMENTS")
+fi
+codesign "${codesign_args[@]}" "$APP_DIR"
+
+if [[ "$SKIP_INSTALL" == "1" ]]; then
+  echo "Packaged: $APP_DIR"
+  exit 0
 fi
 
 mkdir -p "$TARGET_DIR"
