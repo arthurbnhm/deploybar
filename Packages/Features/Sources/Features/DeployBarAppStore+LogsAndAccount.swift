@@ -3,12 +3,6 @@ import Foundation
 
 @MainActor
 extension DeployBarAppStore {
-    public func openLogsTapped(for status: ProjectStatus) {
-        Task {
-            await openLogs(for: status)
-        }
-    }
-
     public func openLogs(for status: ProjectStatus) async {
         guard let snapshot = status.snapshot else {
             monitorError = "No deployment available yet for this project."
@@ -18,7 +12,6 @@ extension DeployBarAppStore {
         selectedLogsProject = status.project
         selectedLogsDeployment = snapshot
         isLoadingLogs = true
-        showingLogs = true
 
         defer {
             isLoadingLogs = false
@@ -47,7 +40,6 @@ extension DeployBarAppStore {
     }
 
     public func closeLogs() {
-        showingLogs = false
         selectedLogsProject = nil
         selectedLogsDeployment = nil
         logEvents = []

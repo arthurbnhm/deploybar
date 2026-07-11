@@ -48,7 +48,6 @@ public final class DeployBarAppStore {
     public internal(set) var isShowingCachedStatuses: Bool = false
     public internal(set) var cachedStatusAge: TimeInterval?
 
-    public internal(set) var showingLogs: Bool = false
     public internal(set) var selectedLogsProject: WatchedProject?
     public internal(set) var selectedLogsDeployment: DeploymentSnapshot?
     public internal(set) var logEvents: [DeploymentEvent] = []
