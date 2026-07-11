@@ -16,7 +16,7 @@ private actor StubVercelClient: VercelClient {
 
     func listTeams(limit _: Int, until _: Int?) async throws -> [Team] { [] }
 
-    func listProjects(teamId _: String?, limit _: Int, until _: Int?) async throws -> [Project] { [] }
+    func listProjects(teamId _: String?, limit _: Int, until _: String?) async throws -> [Project] { [] }
 
     func latestProductionDeployment(projectId: String, teamId _: String?) async throws -> DeploymentSnapshot? {
         guard let snapshots = snapshotsByProject[projectId], !snapshots.isEmpty else {

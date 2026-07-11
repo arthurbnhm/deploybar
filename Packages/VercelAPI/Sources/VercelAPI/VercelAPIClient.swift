@@ -2,6 +2,8 @@ import Core
 import Foundation
 
 public final class VercelAPIClient: VercelClient {
+    private static let appVersion = "0.1.0"
+
     private let baseURL = URL(string: "https://api.vercel.com")!
     private let decoder: JSONDecoder
     private let session: URLSession
@@ -23,6 +25,52 @@ public final class VercelAPIClient: VercelClient {
     }
 
     public func listTeams(limit: Int, until: Int?) async throws -> [Team] {
+        var allTeams: [Team] = []
+        var nextCursor = until
+        var seenCursors = Set<Int>()
+        if let until {
+            seenCursors.insert(until)
+        }
+
+        repeat {
+            let page = try await listTeamsPage(limit: limit, until: nextCursor)
+            allTeams.append(contentsOf: page.teams)
+            nextCursor = page.nextCursor
+
+            if let nextCursor {
+                guard seenCursors.insert(nextCursor).inserted else {
+                    throw DeployBarError.networking("Vercel teams pagination returned a repeated cursor.")
+                }
+            }
+        } while nextCursor != nil
+
+        return allTeams
+    }
+
+    public func listProjects(teamId: String?, limit: Int, until: String?) async throws -> [Project] {
+        var allProjects: [Project] = []
+        var nextCursor = until
+        var seenCursors = Set<String>()
+        if let until {
+            seenCursors.insert(until)
+        }
+
+        repeat {
+            let page = try await listProjectsPage(teamId: teamId, limit: limit, until: nextCursor)
+            allProjects.append(contentsOf: page.projects)
+            nextCursor = page.nextCursor
+
+            if let nextCursor {
+                guard seenCursors.insert(nextCursor).inserted else {
+                    throw DeployBarError.networking("Vercel projects pagination returned a repeated cursor.")
+                }
+            }
+        } while nextCursor != nil
+
+        return allProjects
+    }
+
+    private func listTeamsPage(limit: Int, until: Int?) async throws -> (teams: [Team], nextCursor: Int?) {
         var queryItems: [URLQueryItem] = [URLQueryItem(name: "limit", value: "\(limit)")]
         if let until {
             queryItems.append(URLQueryItem(name: "until", value: "\(until)"))
@@ -30,10 +78,13 @@ public final class VercelAPIClient: VercelClient {
 
         let request = try makeRequest(path: "/v2/teams", queryItems: queryItems)
         let payload: TeamListResponse = try await send(request, as: TeamListResponse.self)
-        return payload.teams.map { Team(id: $0.id, slug: $0.slug, name: $0.name) }
+        return (
+            payload.teams.map { Team(id: $0.id, slug: $0.slug, name: $0.name) },
+            payload.pagination?.next
+        )
     }
 
-    public func listProjects(teamId: String?, limit: Int, until: Int?) async throws -> [Project] {
+    private func listProjectsPage(teamId: String?, limit: Int, until: String?) async throws -> (projects: [Project], nextCursor: String?) {
         var queryItems: [URLQueryItem] = [URLQueryItem(name: "limit", value: "\(limit)")]
         if let teamId {
             queryItems.append(URLQueryItem(name: "teamId", value: teamId))
@@ -42,17 +93,20 @@ public final class VercelAPIClient: VercelClient {
             queryItems.append(URLQueryItem(name: "until", value: "\(until)"))
         }
 
-        let request = try makeRequest(path: "/v9/projects", queryItems: queryItems)
+        let request = try makeRequest(path: "/v10/projects", queryItems: queryItems)
         let payload: ProjectListResponse = try await send(request, as: ProjectListResponse.self)
 
-        return payload.projects.map {
-            Project(
-                id: $0.id,
-                name: $0.name,
-                teamId: $0.accountId,
-                updatedAt: Date(timeIntervalSince1970: TimeInterval($0.updatedAt) / 1000)
-            )
-        }
+        return (
+            payload.projects.map {
+                Project(
+                    id: $0.id,
+                    name: $0.name,
+                    teamId: $0.accountId,
+                    updatedAt: Date(timeIntervalSince1970: TimeInterval($0.updatedAt) / 1000)
+                )
+            },
+            payload.pagination?.next
+        )
     }
 
     public func latestProductionDeployment(projectId: String, teamId: String?) async throws -> DeploymentSnapshot? {
@@ -122,7 +176,7 @@ public final class VercelAPIClient: VercelClient {
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("DeployBar/1.0", forHTTPHeaderField: "User-Agent")
+        request.setValue("DeployBar/\(Self.appVersion)", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 20
         return request
     }

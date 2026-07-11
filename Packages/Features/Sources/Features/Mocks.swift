@@ -102,7 +102,7 @@ actor MockVercelClient: VercelClient {
         [Team(id: "team_1", slug: "example-team", name: "Example Team")]
     }
 
-    func listProjects(teamId: String?, limit _: Int, until _: Int?) async throws -> [Project] {
+    func listProjects(teamId: String?, limit _: Int, until _: String?) async throws -> [Project] {
         [
             Project(id: "proj_1", name: "Website", teamId: teamId, updatedAt: Date()),
             Project(id: "proj_2", name: "API", teamId: teamId, updatedAt: Date())

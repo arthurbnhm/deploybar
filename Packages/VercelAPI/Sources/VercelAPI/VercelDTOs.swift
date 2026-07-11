@@ -12,6 +12,7 @@ struct UserDTO: Decodable {
 
 struct TeamListResponse: Decodable {
     let teams: [TeamDTO]
+    let pagination: TimestampPaginationDTO?
 }
 
 struct TeamDTO: Decodable {
@@ -22,21 +23,33 @@ struct TeamDTO: Decodable {
 
 struct ProjectListResponse: Decodable {
     let projects: [ProjectDTO]
+    let pagination: ContinuationPaginationDTO?
 
     private enum CodingKeys: String, CodingKey {
         case projects = "projects"
+        case pagination
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         if let array = try? container.decode([ProjectDTO].self) {
             self.projects = array
+            self.pagination = nil
             return
         }
 
         let keyed = try decoder.container(keyedBy: CodingKeys.self)
         self.projects = try keyed.decode([ProjectDTO].self, forKey: .projects)
+        self.pagination = try keyed.decodeIfPresent(ContinuationPaginationDTO.self, forKey: .pagination)
     }
+}
+
+struct TimestampPaginationDTO: Decodable {
+    let next: Int?
+}
+
+struct ContinuationPaginationDTO: Decodable {
+    let next: String?
 }
 
 struct ProjectDTO: Decodable {

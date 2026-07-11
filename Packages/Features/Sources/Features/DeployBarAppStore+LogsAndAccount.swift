@@ -52,4 +52,44 @@ extension DeployBarAppStore {
         selectedLogsDeployment = nil
         logEvents = []
     }
+
+    public func disconnectAccount() async {
+        monitorTask?.cancel()
+        monitorTask = nil
+
+        var cleanupErrors: [String] = []
+        do {
+            try env.tokenStore.clearToken()
+        } catch {
+            cleanupErrors.append(error.localizedDescription)
+        }
+
+        do {
+            try env.settingsStore.clear()
+        } catch {
+            cleanupErrors.append(error.localizedDescription)
+        }
+
+        do {
+            try await env.eventStore.clear()
+        } catch {
+            cleanupErrors.append(error.localizedDescription)
+        }
+
+        await env.monitoringEngine.resetState()
+
+        authUser = nil
+        teams = []
+        availableProjects = []
+        selectedProjectIDs = []
+        selectedScope = .personal
+        settings = AppSettings()
+        tokenError = nil
+        tokenNotice = cleanupErrors.isEmpty
+            ? "Disconnected from Vercel and cleared local DeployBar data."
+            : "Disconnected from Vercel, but some local data could not be cleared."
+        monitorError = cleanupErrors.first
+        closeLogs()
+        enterSetupRequiredState(authReason: Self.defaultTokenPrompt)
+    }
 }

@@ -50,7 +50,7 @@ private actor TokenPruningMockVercelClient: VercelClient {
         [Team(id: "team_1", slug: "example-team", name: "Example Team")]
     }
 
-    func listProjects(teamId: String?, limit _: Int, until _: Int?) async throws -> [Project] {
+    func listProjects(teamId: String?, limit _: Int, until _: String?) async throws -> [Project] {
         let first = [
             Project(id: "proj_1", name: "Website", teamId: teamId, updatedAt: Date()),
             Project(id: "proj_2", name: "API", teamId: teamId, updatedAt: Date())
@@ -96,7 +96,7 @@ private actor MissingTokenRefreshMockVercelClient: VercelClient {
         []
     }
 
-    func listProjects(teamId: String?, limit _: Int, until _: Int?) async throws -> [Project] {
+    func listProjects(teamId: String?, limit _: Int, until _: String?) async throws -> [Project] {
         [
             Project(id: "proj_1", name: "Website", teamId: teamId, updatedAt: Date())
         ]
@@ -139,7 +139,7 @@ private actor FlakyStartupAuthMockVercelClient: VercelClient {
         []
     }
 
-    func listProjects(teamId: String?, limit _: Int, until _: Int?) async throws -> [Project] {
+    func listProjects(teamId: String?, limit _: Int, until _: String?) async throws -> [Project] {
         [
             Project(id: "proj_1", name: "Website", teamId: teamId, updatedAt: Date())
         ]
@@ -344,6 +344,64 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(store.settings.cachedProjectStatuses.count, 1)
         XCTAssertEqual(store.settings.cachedProjectStatuses.first?.project.id, watched.id)
         XCTAssertEqual(store.settings.statusCacheUpdatedAt, refreshedAt)
+    }
+
+    func testDisconnectAccountClearsLocalStateAndStores() async throws {
+        let tokenStore = InMemoryTokenStore()
+        try tokenStore.saveToken("token_live")
+
+        let settingsStore = InMemorySettingsStore()
+        try settingsStore.save(
+            AppSettings(
+                watchedProjects: [
+                    WatchedProject(id: "proj_1", name: "Website", teamId: nil, teamSlug: nil)
+                ],
+                cachedProjectStatuses: [
+                    CachedProjectStatus(
+                        project: WatchedProject(id: "proj_1", name: "Website", teamId: nil, teamSlug: nil),
+                        snapshot: nil,
+                        lastUpdatedAt: Date()
+                    )
+                ],
+                statusCacheUpdatedAt: Date()
+            )
+        )
+
+        let eventStore = InMemoryEventStore()
+        try await eventStore.persist(
+            events: [
+                DeploymentEvent(
+                    id: "event_1",
+                    deploymentId: "dep_1",
+                    createdAt: Date(),
+                    level: "info",
+                    message: "Done"
+                )
+            ]
+        )
+
+        let store = makeStore(
+            notificationRouter: NotificationSpyRouter(granted: true),
+            tokenStore: tokenStore,
+            settingsStore: settingsStore,
+            eventStore: eventStore
+        )
+        store.authUser = AuthUser(id: "u1", username: "user", email: nil)
+        store.teams = [Team(id: "team_1", slug: "team", name: "Team")]
+        store.availableProjects = [Project(id: "proj_1", name: "Website", teamId: nil, updatedAt: nil)]
+        store.selectedProjectIDs = ["proj_1"]
+        store.settings = try settingsStore.load()
+
+        await store.disconnectAccount()
+
+        XCTAssertNil(try tokenStore.readToken())
+        XCTAssertEqual(try settingsStore.load(), AppSettings())
+        let remainingEvents = try await eventStore.load(deploymentId: "dep_1", limit: 10)
+        XCTAssertTrue(remainingEvents.isEmpty)
+        XCTAssertNil(store.authUser)
+        XCTAssertTrue(store.selectedProjectIDs.isEmpty)
+        XCTAssertEqual(store.phase, .setupRequired)
+        XCTAssertNotNil(store.tokenNotice)
     }
 
     func testMonitoringMissingTokenRetriesBeforeSetupAndDoesNotClearStoredToken() async throws {

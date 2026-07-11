@@ -3,7 +3,7 @@ import Foundation
 public protocol VercelClient: Sendable {
     func validateToken() async throws -> AuthUser
     func listTeams(limit: Int, until: Int?) async throws -> [Team]
-    func listProjects(teamId: String?, limit: Int, until: Int?) async throws -> [Project]
+    func listProjects(teamId: String?, limit: Int, until: String?) async throws -> [Project]
     func latestProductionDeployment(projectId: String, teamId: String?) async throws -> DeploymentSnapshot?
     func deploymentEvents(deploymentId: String, limit: Int, since: Int?) async throws -> [DeploymentEvent]
 }
