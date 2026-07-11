@@ -1,11 +1,12 @@
 export type DeploymentStatus = "ready" | "building" | "failed" | "queued" | "canceled";
 
+// Mirrors the macOS system palette the app uses (.green/.orange/.red/.indigo/.gray).
 export const STATUS_COLORS: Record<DeploymentStatus, string> = {
-  ready: "#33C77A",
-  building: "#F5A624",
-  failed: "#F05247",
-  queued: "#6B8CF0",
-  canceled: "#8F8F93",
+  ready: "#30D158",
+  building: "#FF9F0A",
+  failed: "#FF453A",
+  queued: "#5E5CE6",
+  canceled: "#98989D",
 };
 
 export const STATUS_LABELS: Record<DeploymentStatus, string> = {
@@ -24,10 +25,10 @@ export interface MockProject {
 }
 
 export const MOCK_PROJECTS: MockProject[] = [
-  { name: "my-saas-app", commit: "fix: resolve auth redirect", status: "ready", time: "2m ago" },
-  { name: "docs-site", commit: "docs: update API reference", status: "building", time: "just now" },
-  { name: "marketing-page", commit: "feat: add pricing section", status: "ready", time: "5m ago" },
-  { name: "api-gateway", commit: "chore: bump dependencies", status: "failed", time: "12m ago" },
+  { name: "my-saas-app", commit: "fix: resolve auth redirect", status: "ready", time: "2 min. ago" },
+  { name: "docs-site", commit: "docs: update API reference", status: "building", time: "now" },
+  { name: "marketing-page", commit: "feat: add pricing section", status: "ready", time: "5 min. ago" },
+  { name: "api-gateway", commit: "chore: bump dependencies", status: "failed", time: "12 min. ago" },
 ];
 
 export interface Feature {
@@ -42,7 +43,7 @@ export const FEATURES: Feature[] = [
   },
   {
     title: "Native macOS app",
-    description: "Built with SwiftUI for a seamless, lightweight menu bar experience.",
+    description: "Built with SwiftUI and the macOS 26 Liquid Glass design language — a lightweight, truly native menu bar experience.",
   },
   {
     title: "Smart notifications",
