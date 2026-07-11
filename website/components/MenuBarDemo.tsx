@@ -98,7 +98,19 @@ export function MenuBarDemo() {
 
       {open && (
         <div className="absolute right-0 top-full z-50 mt-3 w-[min(380px,calc(100vw-2rem))] animate-slide-up">
-          <MenuBarMockup animated projects={projects} />
+          {/* Ambient light behind the panel so the glass has something to bend */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -inset-10"
+            style={{
+              background:
+                "radial-gradient(55% 45% at 22% 18%, rgba(94,92,230,0.22), transparent 70%), radial-gradient(50% 42% at 80% 85%, rgba(233,161,63,0.18), transparent 70%)",
+              filter: "blur(28px)",
+            }}
+          />
+          <div className="relative">
+            <MenuBarMockup animated projects={projects} />
+          </div>
         </div>
       )}
     </div>

@@ -163,13 +163,32 @@ export function MenuBarMockup({
 
   return (
     <div
-      className={`w-[380px] max-w-full rounded-[20px] overflow-hidden backdrop-blur-2xl ${className}`}
+      className={`relative w-[380px] max-w-full rounded-[22px] overflow-hidden ${className}`}
       style={{
-        backgroundColor: "rgba(22,22,26,0.78)",
-        boxShadow:
-          "0 0 0 1px rgba(255,255,255,0.09), inset 0 1px 0 rgba(255,255,255,0.08), 0 30px 60px rgba(0,0,0,0.55)",
+        background:
+          "linear-gradient(180deg, rgba(46,46,54,0.52) 0%, rgba(26,26,31,0.6) 100%)",
+        backdropFilter: "blur(36px) saturate(180%)",
+        WebkitBackdropFilter: "blur(36px) saturate(180%)",
+        boxShadow: [
+          "0 0 0 1px rgba(255,255,255,0.08)", // hairline
+          "inset 0 1px 0 rgba(255,255,255,0.16)", // specular top rim
+          "inset 0 -1px 0 rgba(255,255,255,0.05)", // bottom rim
+          "inset 1px 0 0 rgba(255,255,255,0.04)", // side rims
+          "inset -1px 0 0 rgba(255,255,255,0.04)",
+          "0 24px 60px rgba(0,0,0,0.55)",
+          "0 6px 18px rgba(0,0,0,0.35)",
+        ].join(", "),
       }}
     >
+      {/* Specular sheen falling from the top edge, like light on glass */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 rounded-[22px]"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 32%, transparent 55%)",
+        }}
+      />
       {/* Header */}
       <div className="px-4 pt-3.5 pb-2 flex items-center justify-between">
         <div>
