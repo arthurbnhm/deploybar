@@ -1,22 +1,8 @@
-import { HeroMockup } from "@/components/HeroMockup";
+import { HeroDemoButton } from "@/components/HeroDemoButton";
 import { LogoIcon } from "@/components/Logo";
+import { MenuBarDemo } from "@/components/MenuBarDemo";
 import { AuroraBackdrop, EmberOrb } from "@/components/Shaders";
-import {
-  FEATURES,
-  GITHUB_REPO_URL,
-  MAC_DOWNLOAD_URL,
-  STATUS_COLORS,
-  STATUS_LABELS,
-} from "@/lib/data";
-import type { DeploymentStatus } from "@/lib/data";
-
-const STATUS_ORDER: DeploymentStatus[] = [
-  "ready",
-  "building",
-  "failed",
-  "queued",
-  "canceled",
-];
+import { FEATURES, GITHUB_REPO_URL, MAC_DOWNLOAD_URL } from "@/lib/data";
 
 function AppleIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
@@ -57,7 +43,7 @@ export default function HomePage() {
       <section className="relative">
         <AuroraBackdrop />
 
-        <header className="relative z-10">
+        <header className="relative z-30">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
             <div className="flex items-center gap-2.5">
               <LogoIcon className="h-7 w-7" />
@@ -68,7 +54,7 @@ export default function HomePage() {
                 href={GITHUB_REPO_URL}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium text-white/60 transition-colors hover:text-white"
+                className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium text-white/60 transition-colors hover:text-white"
               >
                 <GitHubIcon />
                 <span className="hidden sm:inline">GitHub</span>
@@ -77,15 +63,16 @@ export default function HomePage() {
                 href={MAC_DOWNLOAD_URL}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center rounded-full border border-white/15 px-5 py-2.5 text-sm font-medium text-white/85 transition-colors hover:border-white/35 hover:text-white"
+                className="inline-flex items-center rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-white/85 transition-colors hover:border-white/35 hover:text-white"
               >
                 Download
               </a>
+              <MenuBarDemo />
             </nav>
           </div>
         </header>
 
-        <div className="relative z-10 mx-auto max-w-5xl px-6 pt-16 text-center md:pt-24">
+        <div className="relative z-10 mx-auto max-w-5xl px-6 pb-64 pt-16 text-center md:pb-80 md:pt-24">
           <p
             className="animate-rise font-mono text-[11px] uppercase tracking-[0.32em] text-white/40"
             style={{ animationDelay: "0.05s" }}
@@ -126,15 +113,7 @@ export default function HomePage() {
             style={{ animationDelay: "0.4s" }}
           >
             <DownloadButton />
-            <a
-              href={GITHUB_REPO_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2.5 rounded-full border border-white/15 px-6 py-3 text-sm font-medium text-white/80 transition-colors hover:border-white/35 hover:text-white"
-            >
-              <GitHubIcon />
-              Star on GitHub
-            </a>
+            <HeroDemoButton />
           </div>
 
           <p
@@ -144,40 +123,15 @@ export default function HomePage() {
             Free · Open source · macOS 26+
           </p>
         </div>
-
-        <div
-          className="animate-rise relative z-10 mt-16 flex justify-center px-6 pb-28 md:mt-20 md:pb-36"
-          style={{ animationDelay: "0.6s" }}
-        >
-          <HeroMockup />
-        </div>
       </section>
-
-      {/* ——— Status legend ——— */}
-      <div className="border-y border-white/[0.06]">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-3 px-6 py-5 font-mono text-[11px] uppercase tracking-[0.22em] text-white/40">
-          {STATUS_ORDER.map((status) => (
-            <span key={status} className="inline-flex items-center gap-2.5">
-              <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: STATUS_COLORS[status] }}
-              />
-              {STATUS_LABELS[status]}
-            </span>
-          ))}
-        </div>
-      </div>
 
       {/* ——— Features ——— */}
       <section className="mx-auto max-w-6xl px-6 py-28 md:py-36">
-        <div className="flex flex-wrap items-end justify-between gap-6 border-b border-white/10 pb-8">
+        <div className="border-b border-white/10 pb-8">
           <h2 className="text-4xl tracking-[-0.02em] md:text-5xl">
             Small app,{" "}
             <em className="font-serif font-normal text-white/90">sharp instincts.</em>
           </h2>
-          <span className="font-mono text-[11px] uppercase tracking-[0.28em] text-white/30">
-            01 — Features
-          </span>
         </div>
 
         <div className="grid grid-cols-1 gap-x-12 md:grid-cols-2 lg:grid-cols-3">
@@ -201,7 +155,7 @@ export default function HomePage() {
       </section>
 
       {/* ——— Closing CTA ——— */}
-      <section className="relative overflow-hidden py-36 md:py-48">
+      <section className="relative py-40 md:py-56">
         <EmberOrb />
         <div className="relative z-10 mx-auto max-w-3xl px-6 text-center">
           <h2 className="font-serif text-[clamp(2.75rem,7vw,5.25rem)] leading-[1.02] tracking-[-0.01em]">
@@ -217,12 +171,12 @@ export default function HomePage() {
       </section>
 
       {/* ——— Footer ——— */}
-      <footer className="border-t border-white/[0.06]">
+      <footer className="relative border-t border-white/[0.06]">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-6 px-6 py-10">
           <div className="flex items-center gap-2.5">
             <LogoIcon className="h-6 w-6" />
             <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-white/35">
-              DeployBar · MIT · 2026
+              DeployBar · 2026
             </span>
           </div>
           <div className="flex items-center gap-8 font-mono text-[11px] uppercase tracking-[0.22em]">

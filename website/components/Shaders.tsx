@@ -1,19 +1,45 @@
 "use client";
 
+import { getShaderNoiseTexture } from "@paper-design/shaders";
 import { GrainGradient } from "@paper-design/shaders-react";
 import { useEffect, useState } from "react";
+
+/**
+ * GrainGradient builds its noise texture from a data-URI Image during render
+ * and the WebGL mount throws if that image hasn't finished decoding yet.
+ * Decode it once up front so every later mount finds it ready.
+ */
+let noiseTextureReady: Promise<void> | null = null;
+function ensureNoiseTextureDecoded(): Promise<void> {
+  if (!noiseTextureReady) {
+    noiseTextureReady = (async () => {
+      try {
+        await getShaderNoiseTexture()?.decode();
+      } catch {
+        // If decoding fails we mount anyway; the library falls back gracefully.
+      }
+    })();
+  }
+  return noiseTextureReady;
+}
 
 function useShaderReady() {
   const [mounted, setMounted] = useState(false);
   const [reduced, setReduced] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
+    let active = true;
+    ensureNoiseTextureDecoded().then(() => {
+      if (active) setMounted(true);
+    });
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
     setReduced(query.matches);
     const onChange = (event: MediaQueryListEvent) => setReduced(event.matches);
     query.addEventListener("change", onChange);
-    return () => query.removeEventListener("change", onChange);
+    return () => {
+      active = false;
+      query.removeEventListener("change", onChange);
+    };
   }, []);
 
   return { mounted, reduced };
