@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { MOCK_PROJECTS, STATUS_COLORS, STATUS_LABELS, type DeploymentStatus } from "@/lib/data";
+import {
+  MOCK_PROJECTS,
+  STATUS_COLORS,
+  STATUS_LABELS,
+  type DeploymentStatus,
+  type MockProject,
+} from "@/lib/data";
 import { StatusDot } from "./StatusDot";
 
 function StatusPill({ status }: { status: DeploymentStatus }) {
@@ -143,18 +149,25 @@ function FooterButton({ label, icon }: { label: string; icon: React.ReactNode })
 export function MenuBarMockup({
   animated = true,
   className = "",
+  projects = MOCK_PROJECTS,
 }: {
   animated?: boolean;
   className?: string;
+  projects?: MockProject[];
 }) {
   const [expandedProject, setExpandedProject] = useState<string | null>(null);
 
+  const anyDeploying = projects.some(
+    (project) => project.status === "building" || project.status === "queued"
+  );
+
   return (
     <div
-      className={`w-[380px] rounded-[18px] overflow-hidden backdrop-blur-xl ${className}`}
+      className={`w-[380px] max-w-full rounded-[20px] overflow-hidden backdrop-blur-2xl ${className}`}
       style={{
-        backgroundColor: "rgba(28,28,30,0.92)",
-        boxShadow: "0 25px 50px rgba(0,0,0,0.3)",
+        backgroundColor: "rgba(22,22,26,0.78)",
+        boxShadow:
+          "0 0 0 1px rgba(255,255,255,0.09), inset 0 1px 0 rgba(255,255,255,0.08), 0 30px 60px rgba(0,0,0,0.55)",
       }}
     >
       {/* Header */}
@@ -163,23 +176,33 @@ export function MenuBarMockup({
           <div className="text-[13px] font-semibold text-white">DeployBar</div>
           <div className="text-[11px] text-white/50 mt-0.5">@developer · just now</div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] font-medium text-white/50">Deploying</span>
-          <svg
-            className="w-4 h-4 animate-spin"
-            style={{ color: STATUS_COLORS.building, animationDuration: "2.5s" }}
-            viewBox="0 0 16 16"
-            fill="currentColor"
-          >
-            <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 2a5 5 0 110 10A5 5 0 018 3z" opacity="0.3" />
-            <path d="M8 1a7 7 0 017 7h-2a5 5 0 00-5-5V1z" />
-          </svg>
-        </div>
+        {anyDeploying ? (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-medium text-white/50">Deploying</span>
+            <svg
+              className="w-4 h-4 animate-spin"
+              style={{ color: STATUS_COLORS.building, animationDuration: "2.5s" }}
+              viewBox="0 0 16 16"
+              fill="currentColor"
+            >
+              <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 2a5 5 0 110 10A5 5 0 018 3z" opacity="0.3" />
+              <path d="M8 1a7 7 0 017 7h-2a5 5 0 00-5-5V1z" />
+            </svg>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-medium text-white/50">Live</span>
+            <span
+              className="w-2 h-2 rounded-full"
+              style={{ backgroundColor: STATUS_COLORS.ready }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Project List */}
       <div className="px-2 py-1.5 space-y-1">
-        {MOCK_PROJECTS.map((project) =>
+        {projects.map((project) =>
           expandedProject === project.name ? (
             <ActionsTray
               key={project.name}
