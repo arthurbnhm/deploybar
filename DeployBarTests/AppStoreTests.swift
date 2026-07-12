@@ -169,6 +169,37 @@ private actor FlakyStartupAuthMockVercelClient: VercelClient {
     }
 }
 
+private actor TransitioningMockVercelClient: VercelClient {
+    private var callCount = 0
+
+    func validateToken() async throws -> AuthUser {
+        AuthUser(id: "u1", username: "transition-user", email: nil)
+    }
+
+    func listTeams(limit _: Int, until _: Int?) async throws -> [Team] { [] }
+
+    func listProjects(teamId: String?, limit _: Int, until _: String?) async throws -> [Project] {
+        [Project(id: "proj_1", name: "Website", teamId: teamId, updatedAt: Date())]
+    }
+
+    func latestProductionDeployment(projectId: String, teamId _: String?) async throws -> DeploymentSnapshot? {
+        defer { callCount += 1 }
+        let isBaseline = callCount == 0
+        return DeploymentSnapshot(
+            id: isBaseline ? "dep_build" : "dep_ready",
+            projectId: projectId,
+            stage: isBaseline ? .building : .ready,
+            createdAt: Date(),
+            url: nil,
+            commitMessage: nil
+        )
+    }
+
+    func deploymentEvents(deploymentId _: String, limit _: Int, since _: Int?) async throws -> [DeploymentEvent] {
+        []
+    }
+}
+
 @MainActor
 final class AppStoreTests: XCTestCase {
     func testProjectSelectionIsCappedAtTwenty() async {
@@ -435,6 +466,61 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(store.phase, .setupRequired)
         XCTAssertEqual(store.tokenError, "Saved token is unavailable. Reconnect your Vercel token.")
         XCTAssertEqual(try tokenStore.readToken(), "token_live")
+    }
+
+    func testPurgeFailureDoesNotBlockNotificationDelivery() async throws {
+        let spy = NotificationSpyRouter(granted: true)
+        let eventStore = InMemoryEventStore()
+        let store = makeStore(
+            notificationRouter: spy,
+            client: TransitioningMockVercelClient(),
+            eventStore: eventStore
+        )
+
+        let didConnect = await store.updateToken("token_live")
+        XCTAssertTrue(didConnect)
+
+        store.toggleProjectSelection("proj_1")
+        store.updateWatchedProjects()
+        XCTAssertEqual(store.phase, .running)
+        store.monitorTask?.cancel()
+        store.monitorTask = nil
+
+        // Baseline observation: building. No transition yet.
+        _ = await store.performRefreshCycle()
+
+        await eventStore.setPurgeError(DeployBarError.networking("purge boom"))
+
+        // building -> ready: a transition that must be delivered even though purge will throw.
+        _ = await store.performRefreshCycle()
+
+        await waitForNotificationCount(1, spy: spy)
+        let notificationCount = await spy.notificationCount()
+        XCTAssertEqual(notificationCount, 1)
+    }
+
+    func testConsecutiveRefreshCyclesThrottlePurgeToOncePerHour() async throws {
+        let spy = NotificationSpyRouter(granted: true)
+        let eventStore = InMemoryEventStore()
+        let store = makeStore(
+            notificationRouter: spy,
+            eventStore: eventStore
+        )
+
+        let didConnect = await store.updateToken("token_live")
+        XCTAssertTrue(didConnect)
+
+        store.toggleProjectSelection("proj_1")
+        store.updateWatchedProjects()
+        XCTAssertEqual(store.phase, .running)
+        store.monitorTask?.cancel()
+        store.monitorTask = nil
+
+        _ = await store.performRefreshCycle()
+        _ = await store.performRefreshCycle()
+
+        let purgeCallCount = await eventStore.purgeCallCount
+        XCTAssertEqual(purgeCallCount, 1)
     }
 
     func testBootstrapRetriesTransientValidationBeforeConnecting() async throws {

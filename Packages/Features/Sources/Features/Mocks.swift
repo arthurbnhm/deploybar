@@ -49,6 +49,8 @@ final class InMemorySettingsStore: SettingsStore, @unchecked Sendable {
 
 actor InMemoryEventStore: DeploymentEventStore {
     private var byDeployment: [String: [DeploymentEvent]] = [:]
+    private var purgeError: Error?
+    private(set) var purgeCallCount = 0
 
     func persist(events: [DeploymentEvent]) async throws {
         for event in events {
@@ -61,6 +63,10 @@ actor InMemoryEventStore: DeploymentEventStore {
     }
 
     func purge(olderThan cutoff: Date) async throws {
+        purgeCallCount += 1
+        if let purgeError {
+            throw purgeError
+        }
         byDeployment = byDeployment.mapValues {
             $0.filter { $0.createdAt >= cutoff }
         }
@@ -68,6 +74,10 @@ actor InMemoryEventStore: DeploymentEventStore {
 
     func clear() async throws {
         byDeployment.removeAll()
+    }
+
+    func setPurgeError(_ error: Error?) {
+        purgeError = error
     }
 }
 
