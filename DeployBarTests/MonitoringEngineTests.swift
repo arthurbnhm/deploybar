@@ -48,6 +48,8 @@ private actor ConcurrencyTrackingClient: VercelClient {
         AuthUser(id: "u1", username: "test", email: nil)
     }
 
+    func cancelDeployment(deploymentId _: String, teamId _: String?) async throws {}
+
     func listTeams(limit _: Int, until _: Int?) async throws -> [Team] { [] }
 
     func listProjects(teamId _: String?, limit _: Int, until _: String?) async throws -> [Project] { [] }

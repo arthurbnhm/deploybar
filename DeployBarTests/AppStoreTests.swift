@@ -230,6 +230,8 @@ private actor TransitioningMockVercelClient: VercelClient {
         AuthUser(id: "u1", username: "transition-user", email: nil)
     }
 
+    func cancelDeployment(deploymentId _: String, teamId _: String?) async throws {}
+
     func listTeams(limit _: Int, until _: Int?) async throws -> [Team] { [] }
 
     func listProjects(teamId: String?, limit _: Int, until _: String?) async throws -> [Project] {
@@ -260,6 +262,8 @@ private actor StaticSnapshotMockVercelClient: VercelClient {
     func validateToken() async throws -> AuthUser {
         AuthUser(id: "u1", username: "static-user", email: nil)
     }
+
+    func cancelDeployment(deploymentId _: String, teamId _: String?) async throws {}
 
     func listTeams(limit _: Int, until _: Int?) async throws -> [Team] { [] }
 
@@ -299,6 +303,8 @@ private actor TailingMockVercelClient: VercelClient {
     func validateToken() async throws -> AuthUser {
         AuthUser(id: "u1", username: "tail-user", email: nil)
     }
+
+    func cancelDeployment(deploymentId _: String, teamId _: String?) async throws {}
 
     func listTeams(limit _: Int, until _: Int?) async throws -> [Team] { [] }
 
