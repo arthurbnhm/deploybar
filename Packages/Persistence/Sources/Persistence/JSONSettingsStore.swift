@@ -18,12 +18,36 @@ public final class JSONSettingsStore: SettingsStore {
             return AppSettings()
         }
 
+        let data: Data
         do {
-            let data = try Data(contentsOf: fileURL)
-            return try decoder.decode(AppSettings.self, from: data)
+            data = try Data(contentsOf: fileURL)
         } catch {
+            // An I/O error reading an existing file is not corruption — falling
+            // back to defaults here would silently wipe good settings on a
+            // transient read failure, so this still throws.
             throw DeployBarError.persistence("Failed to load settings: \(error.localizedDescription)")
         }
+
+        do {
+            return try decoder.decode(AppSettings.self, from: data)
+        } catch {
+            // A corrupt or schema-incompatible settings.json shouldn't block
+            // the app from starting monitoring. Move the bad file aside for
+            // forensics and recover to defaults instead of throwing.
+            moveCorruptFileAside()
+            return AppSettings()
+        }
+    }
+
+    private func moveCorruptFileAside() {
+        let fm = FileManager.default
+        let corruptURL = URL(fileURLWithPath: fileURL.path + ".corrupt")
+
+        if fm.fileExists(atPath: corruptURL.path) {
+            try? fm.removeItem(at: corruptURL)
+        }
+
+        try? fm.moveItem(at: fileURL, to: corruptURL)
     }
 
     public func save(_ settings: AppSettings) throws {
