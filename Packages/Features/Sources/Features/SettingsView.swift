@@ -1,3 +1,4 @@
+import AppKit
 import Core
 import SwiftUI
 
@@ -280,6 +281,14 @@ private struct MonitoringSettingsPane: View {
             } footer: {
                 Text("Automatically start DeployBar when you sign in to your Mac.")
             }
+
+            Section {
+                UpdateCheckRow()
+            } header: {
+                Text("About")
+            } footer: {
+                Text("Checks GitHub Releases when you ask. DeployBar never downloads or installs updates automatically.")
+            }
         }
         .formStyle(.grouped)
     }
@@ -289,6 +298,72 @@ private struct MonitoringSettingsPane: View {
         case .eco: "Power-saving mode with slower idle cadence. Best for battery life."
         case .balanced: "Adaptive updates with balanced API usage. Recommended for most users."
         case .aggressive: "Near real-time updates with the highest API usage."
+        }
+    }
+}
+
+private struct UpdateCheckRow: View {
+    @State private var isChecking = false
+    @State private var availability: UpdateAvailability?
+
+    private var runningVersion: String { UpdateChecker.runningVersion }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Version \(runningVersion)")
+                    .font(.subheadline)
+
+                if let availability {
+                    statusLabel(for: availability)
+                }
+            }
+
+            Spacer()
+
+            Button {
+                Task { await checkForUpdate() }
+            } label: {
+                if isChecking {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(minWidth: 20)
+                } else {
+                    Text("Check for Updates…")
+                }
+            }
+            .controlSize(.small)
+            .disabled(isChecking)
+        }
+        .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private func statusLabel(for availability: UpdateAvailability) -> some View {
+        switch availability {
+        case .upToDate:
+            Text("You're up to date.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case let .updateAvailable(latestVersion, _):
+            Text("Update available: \(latestVersion)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case let .checkFailed(message):
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func checkForUpdate() async {
+        isChecking = true
+        let result = await UpdateChecker.checkForUpdate(currentVersion: runningVersion)
+        availability = result
+        isChecking = false
+
+        if case let .updateAvailable(_, releaseURL) = result {
+            NSWorkspace.shared.open(releaseURL)
         }
     }
 }

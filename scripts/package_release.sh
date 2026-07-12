@@ -10,10 +10,30 @@ ZIP_PATH="$DIST_DIR/$APP_NAME.zip"
 SIGN_IDENTITY="${CODESIGN_IDENTITY:-}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-}"
 SKIP_NOTARIZATION="${SKIP_NOTARIZATION:-0}"
+APP_VERSION="${APP_VERSION:-$(cat "$ROOT/VERSION" 2>/dev/null || echo 0.1.0)}"
+CASK_TEMPLATE="$ROOT/packaging/homebrew/deploybar.rb.tmpl"
+CASK_OUTPUT="$ROOT/packaging/homebrew/deploybar.rb"
 
 select_developer_id_identity() {
   security find-identity -v -p codesigning 2>/dev/null \
     | awk -F '"' '$2 ~ /^Developer ID Application:/ { print $2; exit }'
+}
+
+# Renders the Homebrew cask from packaging/homebrew/deploybar.rb.tmpl, substituting
+# the release version and the zip's SHA256. Every future release must re-run this
+# (via package_release.sh) so the cask stays pinned to the artifact it describes.
+render_cask() {
+  local version="$1"
+  local sha256="$2"
+
+  if [[ ! -f "$CASK_TEMPLATE" ]]; then
+    echo "Cask template not found at $CASK_TEMPLATE, skipping cask render." >&2
+    return 0
+  fi
+
+  sed -e "s/__VERSION__/$version/g" -e "s/__SHA256__/$sha256/g" \
+    "$CASK_TEMPLATE" > "$CASK_OUTPUT"
+  echo "Rendered Homebrew cask: $CASK_OUTPUT (version $version, sha256 $sha256)"
 }
 
 if [[ -z "$SIGN_IDENTITY" ]]; then
@@ -57,14 +77,18 @@ CODESIGN_IDENTITY="$SIGN_IDENTITY" \
 CODESIGN_OPTIONS="runtime" \
 CODESIGN_TIMESTAMP=1 \
 SKIP_INSTALL=1 \
+APP_VERSION="$APP_VERSION" \
 "$ROOT/scripts/install_app.sh"
 
 rm -f "$ZIP_PATH"
 ditto -c -k --keepParent "$APP_DIR" "$ZIP_PATH"
+ZIP_SHA256="$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')"
 
 if [[ "$SKIP_NOTARIZATION" == "1" ]]; then
   echo "Created unnotarized dry-run artifact: $ZIP_PATH"
   echo "Notarization skipped. Do not upload this artifact to GitHub Releases."
+  echo "SHA256: $ZIP_SHA256"
+  render_cask "$APP_VERSION" "$ZIP_SHA256"
   exit 0
 fi
 
@@ -75,7 +99,10 @@ xcrun notarytool submit "$ZIP_PATH" \
 xcrun stapler staple "$APP_DIR"
 rm -f "$ZIP_PATH"
 ditto -c -k --keepParent "$APP_DIR" "$ZIP_PATH"
+ZIP_SHA256="$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')"
 
 spctl --assess --type execute --verbose "$APP_DIR"
 
+render_cask "$APP_VERSION" "$ZIP_SHA256"
 echo "Created Developer ID signed, notarized release artifact: $ZIP_PATH"
+echo "SHA256: $ZIP_SHA256"
