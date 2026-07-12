@@ -200,6 +200,38 @@ private actor TransitioningMockVercelClient: VercelClient {
     }
 }
 
+/// A VercelClient whose `deploymentEvents(...)` responses are driven by call order, so tests can
+/// script a sequence of tail-loop polls (the first call always corresponds to `openLogs`'s
+/// one-shot fetch; subsequent calls correspond to tail-loop iterations).
+private actor TailingMockVercelClient: VercelClient {
+    private var eventBatches: [[DeploymentEvent]]
+    private(set) var deploymentEventsCallCount = 0
+
+    init(eventBatches: [[DeploymentEvent]]) {
+        self.eventBatches = eventBatches
+    }
+
+    func validateToken() async throws -> AuthUser {
+        AuthUser(id: "u1", username: "tail-user", email: nil)
+    }
+
+    func listTeams(limit _: Int, until _: Int?) async throws -> [Team] { [] }
+
+    func listProjects(teamId _: String?, limit _: Int, until _: String?) async throws -> [Project] { [] }
+
+    func latestProductionDeployment(projectId _: String, teamId _: String?) async throws -> DeploymentSnapshot? {
+        nil
+    }
+
+    func deploymentEvents(deploymentId _: String, limit _: Int, since _: Int?) async throws -> [DeploymentEvent] {
+        defer { deploymentEventsCallCount += 1 }
+        guard deploymentEventsCallCount < eventBatches.count else {
+            return []
+        }
+        return eventBatches[deploymentEventsCallCount]
+    }
+}
+
 @MainActor
 final class AppStoreTests: XCTestCase {
     func testProjectSelectionIsCappedAtTwenty() async {
@@ -556,6 +588,183 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(store.authConnectionState, .connected)
 
         store.enterSetupRequiredState()
+    }
+
+    func testLogsTailDeliversAppendedEventsAndStopsOnTerminalStage() async throws {
+        let deploymentId = "dep_1"
+        let watched = WatchedProject(id: "proj_1", name: "Website", teamId: nil, teamSlug: nil)
+        let baseDate = Date()
+        let event0 = DeploymentEvent(
+            id: "\(deploymentId)-1",
+            deploymentId: deploymentId,
+            createdAt: baseDate,
+            level: "info",
+            message: "Starting build"
+        )
+        let event1 = DeploymentEvent(
+            id: "\(deploymentId)-2",
+            deploymentId: deploymentId,
+            createdAt: baseDate.addingTimeInterval(1),
+            level: "info",
+            message: "Installing dependencies"
+        )
+        let event2 = DeploymentEvent(
+            id: "\(deploymentId)-3",
+            deploymentId: deploymentId,
+            createdAt: baseDate.addingTimeInterval(2),
+            level: "info",
+            message: "Build completed"
+        )
+
+        let client = TailingMockVercelClient(eventBatches: [[event0], [event1], [event2]])
+        let store = makeStore(notificationRouter: NotificationSpyRouter(granted: true), client: client)
+        store.logsTailInterval = 0.01
+
+        let buildingSnapshot = DeploymentSnapshot(
+            id: deploymentId,
+            projectId: watched.id,
+            stage: .building,
+            createdAt: baseDate,
+            url: nil,
+            commitMessage: nil
+        )
+        let status = ProjectStatus(project: watched, snapshot: buildingSnapshot, lastUpdatedAt: baseDate)
+        store.projectStatuses = [status]
+
+        await store.openLogs(for: status)
+
+        XCTAssertEqual(store.logEvents.map(\.id), [event0.id])
+        XCTAssertTrue(store.isTailingLogs)
+        XCTAssertNotNil(store.logsTailTask)
+
+        try await waitUntil { store.logEvents.map(\.id) == [event0.id, event1.id] }
+
+        // Still building: the loop must keep polling instead of stopping.
+        XCTAssertTrue(store.isTailingLogs)
+
+        // Simulate the monitoring loop observing the deployment finish.
+        let readySnapshot = DeploymentSnapshot(
+            id: deploymentId,
+            projectId: watched.id,
+            stage: .ready,
+            createdAt: baseDate,
+            url: nil,
+            commitMessage: nil
+        )
+        store.projectStatuses = [ProjectStatus(project: watched, snapshot: readySnapshot, lastUpdatedAt: Date())]
+
+        try await waitUntil { store.logEvents.map(\.id) == [event0.id, event1.id, event2.id] }
+        try await waitUntil { !store.isTailingLogs }
+
+        XCTAssertNil(store.logsTailTask)
+        XCTAssertEqual(store.selectedLogsDeployment?.stage, .ready)
+    }
+
+    func testLogsTailStopsImmediatelyWhenAlreadyTerminalOnFirstPoll() async throws {
+        let deploymentId = "dep_1"
+        let watched = WatchedProject(id: "proj_1", name: "Website", teamId: nil, teamSlug: nil)
+        let event0 = DeploymentEvent(
+            id: "\(deploymentId)-1",
+            deploymentId: deploymentId,
+            createdAt: Date(),
+            level: "info",
+            message: "Starting build"
+        )
+
+        let client = TailingMockVercelClient(eventBatches: [[event0]])
+        let store = makeStore(notificationRouter: NotificationSpyRouter(granted: true), client: client)
+        store.logsTailInterval = 0.01
+
+        let buildingSnapshot = DeploymentSnapshot(
+            id: deploymentId,
+            projectId: watched.id,
+            stage: .building,
+            createdAt: Date(),
+            url: nil,
+            commitMessage: nil
+        )
+        let openStatus = ProjectStatus(project: watched, snapshot: buildingSnapshot, lastUpdatedAt: Date())
+
+        // The project already shows a terminal stage by the time the tail loop's first poll runs.
+        let failedSnapshot = DeploymentSnapshot(
+            id: deploymentId,
+            projectId: watched.id,
+            stage: .failed,
+            createdAt: Date(),
+            url: nil,
+            commitMessage: nil
+        )
+        store.projectStatuses = [ProjectStatus(project: watched, snapshot: failedSnapshot, lastUpdatedAt: Date())]
+
+        await store.openLogs(for: openStatus)
+
+        XCTAssertTrue(store.isTailingLogs)
+
+        try await waitUntil { !store.isTailingLogs }
+
+        XCTAssertNil(store.logsTailTask)
+        XCTAssertEqual(store.selectedLogsDeployment?.stage, .failed)
+    }
+
+    func testCloseLogsCancelsTailTaskWithNoLeakedPolling() async throws {
+        let deploymentId = "dep_1"
+        let watched = WatchedProject(id: "proj_1", name: "Website", teamId: nil, teamSlug: nil)
+        let event0 = DeploymentEvent(
+            id: "\(deploymentId)-1",
+            deploymentId: deploymentId,
+            createdAt: Date(),
+            level: "info",
+            message: "Starting build"
+        )
+
+        // Every subsequent poll would return a fresh event if the loop were still running.
+        let client = TailingMockVercelClient(eventBatches: Array(repeating: [event0], count: 50))
+        let store = makeStore(notificationRouter: NotificationSpyRouter(granted: true), client: client)
+        store.logsTailInterval = 0.02
+
+        let buildingSnapshot = DeploymentSnapshot(
+            id: deploymentId,
+            projectId: watched.id,
+            stage: .building,
+            createdAt: Date(),
+            url: nil,
+            commitMessage: nil
+        )
+        let status = ProjectStatus(project: watched, snapshot: buildingSnapshot, lastUpdatedAt: Date())
+        store.projectStatuses = [status]
+
+        await store.openLogs(for: status)
+
+        XCTAssertTrue(store.isTailingLogs)
+        XCTAssertNotNil(store.logsTailTask)
+
+        let callsAtClose = await client.deploymentEventsCallCount
+
+        store.closeLogs()
+
+        XCTAssertNil(store.logsTailTask)
+        XCTAssertFalse(store.isTailingLogs)
+
+        // Give a still-running (leaked) loop plenty of opportunity to tick several more times.
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let callsAfterWait = await client.deploymentEventsCallCount
+        XCTAssertLessThanOrEqual(
+            callsAfterWait,
+            callsAtClose + 1,
+            "tail loop must stop polling once closeLogs() cancels it (at most one in-flight call may complete)"
+        )
+    }
+
+    private func waitUntil(timeout: TimeInterval = 2.0, _ condition: () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition() {
+            if Date() > deadline {
+                XCTFail("Timed out waiting for condition.")
+                return
+            }
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
     }
 
     private func makeStore(

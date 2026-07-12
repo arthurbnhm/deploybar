@@ -52,11 +52,15 @@ public final class DeployBarAppStore {
     public internal(set) var selectedLogsDeployment: DeploymentSnapshot?
     public internal(set) var logEvents: [DeploymentEvent] = []
     public internal(set) var isLoadingLogs: Bool = false
+    public internal(set) var isTailingLogs: Bool = false
 
     public internal(set) var menuIsOpen: Bool = false
 
     let env: DeployBarEnvironment
     var monitorTask: Task<Void, Never>?
+    var logsTailTask: Task<Void, Never>?
+    var logsTailInterval: TimeInterval = 2.0
+    var logsTailGeneration = 0
     var hasStarted = false
     var consecutiveTransientAuthFailures = 0
     var lastEventPurgeAt: Date?

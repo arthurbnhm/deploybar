@@ -37,6 +37,13 @@ public struct LogsView: View {
             }
             .sharedBackgroundVisibility(.hidden)
 
+            if store.isTailingLogs {
+                ToolbarItem {
+                    LiveIndicator()
+                }
+                .sharedBackgroundVisibility(.hidden)
+            }
+
             ToolbarSpacer(.fixed)
         }
 
@@ -77,29 +84,26 @@ public struct LogsView: View {
                 description: Text("No log entries found for this deployment.")
             )
         } else {
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(store.logEvents.enumerated()), id: \.element.id) { index, event in
-                        LogRow(event: event, isAlternate: !index.isMultiple(of: 2))
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-            }
-            .scrollEdgeEffectStyle(.soft, for: .top)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                HStack {
-                    Text("\(store.logEvents.count) events")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
+            LogsScrollView(events: store.logEvents)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    HStack {
+                        Text("\(store.logEvents.count) events")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
 
-                    Spacer()
+                        Spacer()
+
+                        if store.isTailingLogs {
+                            Text("Tailing live output…")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.bar)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(.bar)
-            }
         }
     }
 
@@ -126,6 +130,63 @@ public struct LogsView: View {
             return
         }
         NSWorkspace.shared.open(url)
+    }
+}
+
+/// Renders the log event list and keeps the view scrolled to the newest entry as long as the
+/// user is already at (or near) the bottom. Once the user scrolls up to read earlier output,
+/// newly-tailed events no longer yank the scroll position back down; scrolling back to the
+/// bottom sentinel re-engages the follow behavior.
+private struct LogsScrollView: View {
+    let events: [DeploymentEvent]
+
+    @State private var isAtBottom = true
+
+    private static let bottomAnchorID = "logs-bottom-anchor"
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
+                        LogRow(event: event, isAlternate: !index.isMultiple(of: 2))
+                    }
+
+                    Color.clear
+                        .frame(height: 1)
+                        .id(Self.bottomAnchorID)
+                        .onAppear { isAtBottom = true }
+                        .onDisappear { isAtBottom = false }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
+            .scrollEdgeEffectStyle(.soft, for: .top)
+            .onAppear {
+                proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
+            }
+            .onChange(of: events.count) {
+                guard isAtBottom else { return }
+                proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
+            }
+        }
+    }
+}
+
+/// A subtle pulsing indicator shown in the toolbar while the Logs window is actively tailing
+/// an in-flight deployment.
+private struct LiveIndicator: View {
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "circle.fill")
+                .font(.system(size: 6))
+                .foregroundStyle(.red)
+                .symbolEffect(.pulse, isActive: true)
+
+            Text("Live")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
