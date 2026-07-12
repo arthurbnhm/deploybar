@@ -133,8 +133,9 @@ extension DeployBarAppStore {
                 tokenError = nil
             }
 
-            try await env.eventStore.purge(olderThan: Date().addingTimeInterval(-7 * 24 * 60 * 60))
             await handleTransitions(update.transitions)
+            await env.monitoringEngine.markNotified(update.transitions)
+            await purgeOldEventsIfDue()
 
             return update.nextDelay
         } catch let error as DeployBarError {
@@ -197,6 +198,15 @@ extension DeployBarAppStore {
             notificationRouter: env.notificationRouter,
             soundPlayer: env.soundPlayer
         )
+    }
+
+    private func purgeOldEventsIfDue() async {
+        let purgeInterval: TimeInterval = 60 * 60
+        if let lastEventPurgeAt, Date().timeIntervalSince(lastEventPurgeAt) < purgeInterval {
+            return
+        }
+        lastEventPurgeAt = Date()
+        try? await env.eventStore.purge(olderThan: Date().addingTimeInterval(-7 * 24 * 60 * 60))
     }
 
     func persistStatusCache(from statuses: [ProjectStatus], refreshedAt: Date) {
