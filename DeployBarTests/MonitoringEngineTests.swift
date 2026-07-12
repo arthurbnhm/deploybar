@@ -84,6 +84,44 @@ final class MonitoringEngineTests: XCTestCase {
         XCTAssertEqual(secondUpdate.transitions.count, 1)
     }
 
+    func testUnconfirmedTransitionReEmitsUntilMarkedNotified() async throws {
+        let building = DeploymentSnapshot(
+            id: "dep_confirm_build",
+            projectId: "p_confirm",
+            stage: .building,
+            createdAt: Date(),
+            url: nil,
+            commitMessage: nil
+        )
+        let ready = DeploymentSnapshot(
+            id: "dep_confirm_ready",
+            projectId: "p_confirm",
+            stage: .ready,
+            createdAt: Date(),
+            url: nil,
+            commitMessage: nil
+        )
+
+        let client = StubVercelClient(snapshotsByProject: ["p_confirm": [building, ready]])
+        let engine = MonitoringEngine(client: client)
+        let watched = [WatchedProject(id: "p_confirm", name: "Project", teamId: nil, teamSlug: nil)]
+
+        _ = try await engine.refresh(projects: watched, profile: .balanced, menuIsOpen: false)
+        let secondUpdate = try await engine.refresh(projects: watched, profile: .balanced, menuIsOpen: false)
+        XCTAssertEqual(secondUpdate.transitions.count, 1)
+
+        // Do NOT call markNotified: simulate a refresh cycle that was cancelled after
+        // detecting the transition but before delivery was confirmed. The transition
+        // must be emitted again on the next cycle rather than silently dropped.
+        let thirdUpdate = try await engine.refresh(projects: watched, profile: .balanced, menuIsOpen: false)
+        XCTAssertEqual(thirdUpdate.transitions.count, 1)
+
+        await engine.markNotified(secondUpdate.transitions)
+
+        let fourthUpdate = try await engine.refresh(projects: watched, profile: .balanced, menuIsOpen: false)
+        XCTAssertEqual(fourthUpdate.transitions.count, 0)
+    }
+
     func testNewlyAddedProjectTerminalBaselineDoesNotEmitTransition() async throws {
         let p1Building = DeploymentSnapshot(
             id: "dep_p1_build",
