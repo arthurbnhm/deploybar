@@ -50,6 +50,19 @@ struct TimestampPaginationDTO: Decodable {
 
 struct ContinuationPaginationDTO: Decodable {
     let next: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case next
+    }
+
+    init(from decoder: Decoder) throws {
+        let keyed = try decoder.container(keyedBy: CodingKeys.self)
+        if let numeric = try? keyed.decodeIfPresent(Int64.self, forKey: .next) {
+            self.next = String(numeric)
+        } else {
+            self.next = try keyed.decodeIfPresent(String.self, forKey: .next)
+        }
+    }
 }
 
 struct ProjectDTO: Decodable {
