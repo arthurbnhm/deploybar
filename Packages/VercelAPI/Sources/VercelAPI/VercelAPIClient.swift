@@ -158,7 +158,20 @@ public final class VercelAPIClient: VercelClient {
         }
     }
 
-    private func makeRequest(path: String, queryItems: [URLQueryItem] = []) throws -> URLRequest {
+    /// Cancels a deployment that is currently `queued` or `building`.
+    /// `PATCH /v12/deployments/{id}/cancel` — returns the updated deployment with
+    /// `readyState: "CANCELED"` on success, or 400 if the deployment already finished.
+    public func cancelDeployment(deploymentId: String, teamId: String?) async throws {
+        var queryItems: [URLQueryItem] = []
+        if let teamId {
+            queryItems.append(URLQueryItem(name: "teamId", value: teamId))
+        }
+
+        let request = try makeRequest(path: "/v12/deployments/\(deploymentId)/cancel", method: "PATCH", queryItems: queryItems)
+        _ = try await send(request, as: CancelDeploymentResponse.self, mapForbiddenAsWriteFailure: true)
+    }
+
+    private func makeRequest(path: String, method: String = "GET", queryItems: [URLQueryItem] = []) throws -> URLRequest {
         guard let token = try tokenProvider()?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty else {
             throw DeployBarError.missingToken
         }
@@ -173,6 +186,7 @@ public final class VercelAPIClient: VercelClient {
         }
 
         var request = URLRequest(url: url)
+        request.httpMethod = method
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -181,7 +195,16 @@ public final class VercelAPIClient: VercelClient {
         return request
     }
 
-    private func send<T: Decodable>(_ request: URLRequest, as type: T.Type) async throws -> T {
+    /// - Parameter mapForbiddenAsWriteFailure: When `true`, a 403 response is surfaced as
+    ///   `DeployBarError.forbiddenAction` instead of `.unauthorized`. Write endpoints (cancel, etc.)
+    ///   opt into this so a scope-limited token doesn't trip the store's token-clearing auth failure
+    ///   path — a 403 on a write action means "this token can't do that", not "this token is dead".
+    ///   Read endpoints keep the default (`false`) so 401/403 both mean "reconnect your token".
+    private func send<T: Decodable>(
+        _ request: URLRequest,
+        as type: T.Type,
+        mapForbiddenAsWriteFailure: Bool = false
+    ) async throws -> T {
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await session.data(for: request)
@@ -206,8 +229,11 @@ public final class VercelAPIClient: VercelClient {
                 throw DeployBarError.networking("Decoding error: \(error.localizedDescription)")
             }
 
-        case 401, 403:
+        case 401:
             throw DeployBarError.unauthorized
+
+        case 403:
+            throw mapForbiddenAsWriteFailure ? DeployBarError.forbiddenAction : DeployBarError.unauthorized
 
         case 429:
             let resetTimestamp = http.value(forHTTPHeaderField: "X-RateLimit-Reset")

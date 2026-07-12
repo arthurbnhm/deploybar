@@ -85,6 +85,8 @@ private actor TokenPruningMockVercelClient: VercelClient {
             )
         ]
     }
+
+    func cancelDeployment(deploymentId _: String, teamId _: String?) async throws {}
 }
 
 private actor MissingTokenRefreshMockVercelClient: VercelClient {
@@ -116,6 +118,52 @@ private actor MissingTokenRefreshMockVercelClient: VercelClient {
                 message: "Build completed"
             )
         ]
+    }
+
+    func cancelDeployment(deploymentId _: String, teamId _: String?) async throws {}
+}
+
+/// A cancel call that fails with a 403-shaped error (`.forbiddenAction`). Used to verify the
+/// store surfaces this as a plain error message without treating it like a dead token — unlike
+/// `.unauthorized`/`.invalidToken`, it must not clear the stored token or drop the auth session.
+private actor ForbiddenCancelMockVercelClient: VercelClient {
+    func validateToken() async throws -> AuthUser {
+        AuthUser(id: "u1", username: "scoped-token-user", email: nil)
+    }
+
+    func listTeams(limit _: Int, until _: Int?) async throws -> [Team] {
+        [Team(id: "team_1", slug: "example-team", name: "Example Team")]
+    }
+
+    func listProjects(teamId: String?, limit _: Int, until _: String?) async throws -> [Project] {
+        [Project(id: "proj_1", name: "Website", teamId: teamId, updatedAt: Date())]
+    }
+
+    func latestProductionDeployment(projectId: String, teamId _: String?) async throws -> DeploymentSnapshot? {
+        DeploymentSnapshot(
+            id: "dep_\(projectId)",
+            projectId: projectId,
+            stage: .building,
+            createdAt: Date(),
+            url: nil,
+            commitMessage: "Building now"
+        )
+    }
+
+    func deploymentEvents(deploymentId: String, limit _: Int, since _: Int?) async throws -> [DeploymentEvent] {
+        [
+            DeploymentEvent(
+                id: "\(deploymentId)-1",
+                deploymentId: deploymentId,
+                createdAt: Date(),
+                level: "info",
+                message: "Building"
+            )
+        ]
+    }
+
+    func cancelDeployment(deploymentId _: String, teamId _: String?) async throws {
+        throw DeployBarError.forbiddenAction
     }
 }
 
@@ -167,6 +215,8 @@ private actor FlakyStartupAuthMockVercelClient: VercelClient {
             )
         ]
     }
+
+    func cancelDeployment(deploymentId _: String, teamId _: String?) async throws {}
 }
 
 @MainActor
@@ -435,6 +485,43 @@ final class AppStoreTests: XCTestCase {
         XCTAssertEqual(store.phase, .setupRequired)
         XCTAssertEqual(store.tokenError, "Saved token is unavailable. Reconnect your Vercel token.")
         XCTAssertEqual(try tokenStore.readToken(), "token_live")
+    }
+
+    func testCancelDeploymentForbiddenActionDoesNotClearStoredTokenOrAuthSession() async throws {
+        let tokenStore = InMemoryTokenStore()
+        let store = makeStore(
+            notificationRouter: NotificationSpyRouter(granted: true),
+            client: ForbiddenCancelMockVercelClient(),
+            tokenStore: tokenStore
+        )
+
+        let didConnect = await store.updateToken("token_live")
+        XCTAssertTrue(didConnect)
+
+        store.toggleProjectSelection("proj_1")
+        store.updateWatchedProjects()
+        XCTAssertEqual(store.phase, .running)
+        store.monitorTask?.cancel()
+        store.monitorTask = nil
+
+        _ = await store.performRefreshCycle()
+        store.monitorTask?.cancel()
+        store.monitorTask = nil
+
+        let status = try XCTUnwrap(store.projectStatuses.first { $0.snapshot?.stage == .building })
+
+        await store.cancelDeployment(for: status)
+        store.monitorTask?.cancel()
+        store.monitorTask = nil
+
+        // The key spike assertion: a 403 on the write endpoint must not be treated like a dead
+        // token. `.unauthorized`/`.invalidToken` clear the stored token and drop the session
+        // (see `shouldClearStoredToken` / `handleHardAuthFailure`); `.forbiddenAction` must not.
+        XCTAssertEqual(try tokenStore.readToken(), "token_live")
+        XCTAssertNotNil(store.authUser)
+        XCTAssertEqual(store.authConnectionState, .connected)
+        XCTAssertEqual(store.monitorError, DeployBarError.forbiddenAction.localizedDescription)
+        XCTAssertNil(store.cancelingDeploymentID)
     }
 
     func testBootstrapRetriesTransientValidationBeforeConnecting() async throws {

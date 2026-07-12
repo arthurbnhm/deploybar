@@ -7,6 +7,7 @@ public struct MenuBarContentView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
     @State private var expandedActionsProjectID: String?
+    @State private var pendingCancelStatus: ProjectStatus?
 
     public init(store: DeployBarAppStore) {
         self.store = store
@@ -45,6 +46,26 @@ public struct MenuBarContentView: View {
         .frame(width: DesignSystem.popoverWidth)
         .onAppear { store.setMenuOpen(true) }
         .onDisappear { store.setMenuOpen(false) }
+        .confirmationDialog(
+            "Cancel Build?",
+            isPresented: Binding(
+                get: { pendingCancelStatus != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        pendingCancelStatus = nil
+                    }
+                }
+            ),
+            presenting: pendingCancelStatus
+        ) { status in
+            Button("Cancel Build", role: .destructive) {
+                let target = status
+                Task { await store.cancelDeployment(for: target) }
+            }
+            Button("Keep Building", role: .cancel) {}
+        } message: { status in
+            Text("This stops the in-progress deployment for \(status.project.name). This action is irreversible.")
+        }
     }
 
     private var header: some View {
@@ -118,16 +139,20 @@ public struct MenuBarContentView: View {
                                 if isExpanded {
                                     DeploymentActionsRow(
                                         projectName: status.project.name,
+                                        stage: status.snapshot?.stage ?? .unknown,
                                         onViewLogs: { openLogs(for: status) },
                                         onOpenOnline: { openOnline(for: status) },
                                         onOpenDashboard: { openDashboard(for: status) },
+                                        onCancelBuild: { pendingCancelStatus = status },
                                         onCollapse: {
                                             withAnimation(.snappy(duration: 0.18)) {
                                                 expandedActionsProjectID = nil
                                             }
                                         },
                                         canOpenOnline: status.snapshot?.url != nil,
-                                        canOpenDashboard: projectDashboardURL(for: status) != nil
+                                        canOpenDashboard: projectDashboardURL(for: status) != nil,
+                                        isCanceling: store.cancelingDeploymentID != nil
+                                            && store.cancelingDeploymentID == status.snapshot?.id
                                     )
                                     .id("\(status.id)-actions")
                                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -296,7 +321,7 @@ public struct MenuBarContentView: View {
         }
 
         switch snapshot.stage {
-        case .ready, .failed:
+        case .ready, .failed, .queued, .building:
             withAnimation(.snappy(duration: 0.2)) {
                 if expandedActionsProjectID == status.id {
                     expandedActionsProjectID = nil
@@ -310,7 +335,9 @@ public struct MenuBarContentView: View {
     }
 
     private func shouldShowInlineActions(for status: ProjectStatus) -> Bool {
-        guard let stage = status.snapshot?.stage, stage == .ready || stage == .failed else {
+        guard let stage = status.snapshot?.stage,
+              stage == .ready || stage == .failed || stage == .queued || stage == .building
+        else {
             return false
         }
         return expandedActionsProjectID == status.id
@@ -393,12 +420,19 @@ private struct NoticeStrip: View {
 
 private struct DeploymentActionsRow: View {
     let projectName: String
+    let stage: DeploymentStage
     let onViewLogs: () -> Void
     let onOpenOnline: () -> Void
     let onOpenDashboard: () -> Void
+    let onCancelBuild: () -> Void
     let onCollapse: () -> Void
     let canOpenOnline: Bool
     let canOpenDashboard: Bool
+    let isCanceling: Bool
+
+    private var isInFlight: Bool {
+        stage == .queued || stage == .building
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -431,23 +465,41 @@ private struct DeploymentActionsRow: View {
                     }
                     .buttonStyle(.glassProminent)
 
-                    Button {
-                        onOpenOnline()
-                    } label: {
-                        Label("Online", systemImage: "globe")
+                    if isInFlight {
+                        Button(role: .destructive) {
+                            onCancelBuild()
+                        } label: {
+                            Group {
+                                if isCanceling {
+                                    ProgressView()
+                                        .controlSize(.mini)
+                                } else {
+                                    Label("Cancel Build", systemImage: "xmark.circle")
+                                }
+                            }
                             .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.glass)
-                    .disabled(!canOpenOnline)
+                        }
+                        .buttonStyle(.glass)
+                        .disabled(isCanceling)
+                    } else {
+                        Button {
+                            onOpenOnline()
+                        } label: {
+                            Label("Online", systemImage: "globe")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.glass)
+                        .disabled(!canOpenOnline)
 
-                    Button {
-                        onOpenDashboard()
-                    } label: {
-                        Label("Dashboard", systemImage: "rectangle.grid.2x2")
-                            .frame(maxWidth: .infinity)
+                        Button {
+                            onOpenDashboard()
+                        } label: {
+                            Label("Dashboard", systemImage: "rectangle.grid.2x2")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.glass)
+                        .disabled(!canOpenDashboard)
                     }
-                    .buttonStyle(.glass)
-                    .disabled(!canOpenDashboard)
                 }
             }
             .controlSize(.small)
@@ -468,7 +520,7 @@ private struct ProjectStatusRow: View {
     }
 
     private var canSelect: Bool {
-        stage == .failed || stage == .ready
+        stage == .failed || stage == .ready || stage == .queued || stage == .building
     }
 
     var body: some View {

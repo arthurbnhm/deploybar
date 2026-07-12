@@ -103,6 +103,14 @@ struct DeploymentMeta: Decodable {
     }
 }
 
+/// Minimal decode of the "Cancel a deployment" response. We only need to confirm the body
+/// parses as JSON; the store re-fetches fresh state via `manualRefresh()` after a cancel call
+/// rather than relying on this payload, so unrecognized fields are ignored by design.
+struct CancelDeploymentResponse: Decodable {
+    let id: String?
+    let readyState: String?
+}
+
 struct DeploymentEventListResponse: Decodable {
     let events: [DeploymentEventDTO]
 

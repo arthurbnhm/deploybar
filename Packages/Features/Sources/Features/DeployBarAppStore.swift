@@ -52,6 +52,7 @@ public final class DeployBarAppStore {
     public internal(set) var selectedLogsDeployment: DeploymentSnapshot?
     public internal(set) var logEvents: [DeploymentEvent] = []
     public internal(set) var isLoadingLogs: Bool = false
+    public internal(set) var cancelingDeploymentID: String?
 
     public internal(set) var menuIsOpen: Bool = false
 

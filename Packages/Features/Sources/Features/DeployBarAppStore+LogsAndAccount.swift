@@ -39,6 +39,28 @@ extension DeployBarAppStore {
         }
     }
 
+    /// Cancels an in-flight (`queued`/`building`) deployment, then forces a refresh so the
+    /// popover reflects the new state. A 403 (token lacks write scope) is surfaced as a
+    /// user-facing message without clearing the stored token or dropping the auth session —
+    /// only `.unauthorized`/`.invalidToken` do that (see `shouldClearStoredToken`).
+    public func cancelDeployment(for status: ProjectStatus) async {
+        guard let snapshot = status.snapshot, snapshot.stage == .queued || snapshot.stage == .building else {
+            return
+        }
+
+        cancelingDeploymentID = snapshot.id
+        defer { cancelingDeploymentID = nil }
+
+        do {
+            try await env.vercelClient.cancelDeployment(deploymentId: snapshot.id, teamId: status.project.teamId)
+            monitorError = nil
+        } catch {
+            monitorError = error.localizedDescription
+        }
+
+        manualRefresh()
+    }
+
     public func closeLogs() {
         selectedLogsProject = nil
         selectedLogsDeployment = nil

@@ -30,6 +30,8 @@ private actor StubVercelClient: VercelClient {
     }
 
     func deploymentEvents(deploymentId _: String, limit _: Int, since _: Int?) async throws -> [DeploymentEvent] { [] }
+
+    func cancelDeployment(deploymentId _: String, teamId _: String?) async throws {}
 }
 
 final class MonitoringEngineTests: XCTestCase {

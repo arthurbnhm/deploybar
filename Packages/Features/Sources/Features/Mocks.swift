@@ -131,6 +131,8 @@ actor MockVercelClient: VercelClient {
             )
         ]
     }
+
+    func cancelDeployment(deploymentId _: String, teamId _: String?) async throws {}
 }
 
 public extension DeployBarEnvironment {
