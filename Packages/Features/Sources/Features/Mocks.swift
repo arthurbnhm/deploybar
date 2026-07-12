@@ -27,6 +27,13 @@ final class InMemoryTokenStore: SecureTokenStore, @unchecked Sendable {
 final class InMemorySettingsStore: SettingsStore, @unchecked Sendable {
     private let lock = NSLock()
     private var settings = AppSettings()
+    private var _saveCount = 0
+
+    var saveCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _saveCount
+    }
 
     func load() throws -> AppSettings {
         lock.lock()
@@ -37,6 +44,7 @@ final class InMemorySettingsStore: SettingsStore, @unchecked Sendable {
     func save(_ settings: AppSettings) throws {
         lock.lock()
         self.settings = settings
+        _saveCount += 1
         lock.unlock()
     }
 

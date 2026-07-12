@@ -200,6 +200,37 @@ private actor TransitioningMockVercelClient: VercelClient {
     }
 }
 
+private actor StaticSnapshotMockVercelClient: VercelClient {
+    private let fixedCreatedAt = Date()
+
+    func validateToken() async throws -> AuthUser {
+        AuthUser(id: "u1", username: "static-user", email: nil)
+    }
+
+    func listTeams(limit _: Int, until _: Int?) async throws -> [Team] { [] }
+
+    func listProjects(teamId: String?, limit _: Int, until _: String?) async throws -> [Project] {
+        [Project(id: "proj_1", name: "Website", teamId: teamId, updatedAt: Date())]
+    }
+
+    func latestProductionDeployment(projectId: String, teamId _: String?) async throws -> DeploymentSnapshot? {
+        // Every call returns a value-identical snapshot (fixed createdAt) so consecutive
+        // refresh cycles observe "no change" rather than differing only by timestamp.
+        DeploymentSnapshot(
+            id: "dep_static",
+            projectId: projectId,
+            stage: .ready,
+            createdAt: fixedCreatedAt,
+            url: nil,
+            commitMessage: nil
+        )
+    }
+
+    func deploymentEvents(deploymentId _: String, limit _: Int, since _: Int?) async throws -> [DeploymentEvent] {
+        []
+    }
+}
+
 @MainActor
 final class AppStoreTests: XCTestCase {
     func testProjectSelectionIsCappedAtTwenty() async {
@@ -521,6 +552,32 @@ final class AppStoreTests: XCTestCase {
 
         let purgeCallCount = await eventStore.purgeCallCount
         XCTAssertEqual(purgeCallCount, 1)
+    }
+
+    func testIdenticalRefreshCyclesWithinSixtySecondsWriteSettingsOnce() async throws {
+        let spy = NotificationSpyRouter(granted: true)
+        let settingsStore = InMemorySettingsStore()
+        let store = makeStore(
+            notificationRouter: spy,
+            client: StaticSnapshotMockVercelClient(),
+            settingsStore: settingsStore
+        )
+
+        let didConnect = await store.updateToken("token_live")
+        XCTAssertTrue(didConnect)
+
+        store.toggleProjectSelection("proj_1")
+        store.updateWatchedProjects()
+        XCTAssertEqual(store.phase, .running)
+        store.monitorTask?.cancel()
+        store.monitorTask = nil
+
+        let saveCountBeforeRefreshes = settingsStore.saveCount
+
+        _ = await store.performRefreshCycle()
+        _ = await store.performRefreshCycle()
+
+        XCTAssertEqual(settingsStore.saveCount - saveCountBeforeRefreshes, 1)
     }
 
     func testBootstrapRetriesTransientValidationBeforeConnecting() async throws {
