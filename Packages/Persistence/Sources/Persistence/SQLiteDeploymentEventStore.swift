@@ -4,11 +4,22 @@ import SQLite3
 
 public actor SQLiteDeploymentEventStore: DeploymentEventStore {
     private let dbURL: URL
-    private var db: OpaquePointer?
+    // `OpaquePointer` isn't Sendable, and `deinit` is nonisolated, so the
+    // compiler can't statically prove the property is safe to touch there.
+    // It is: every other access happens through this actor's isolated
+    // methods (serialized by the actor's executor), and `deinit` only runs
+    // once all references are gone, i.e. no concurrent access is possible.
+    private nonisolated(unsafe) var db: OpaquePointer?
     private var isReady = false
 
     public init(dbURL: URL? = nil) throws {
         self.dbURL = try dbURL ?? AppPaths.databaseURL()
+    }
+
+    deinit {
+        if let db {
+            sqlite3_close(db)
+        }
     }
 
     public func persist(events: [DeploymentEvent]) async throws {
@@ -74,7 +85,7 @@ public actor SQLiteDeploymentEventStore: DeploymentEventStore {
         }
 
         sqlite3_bind_text(statement, 1, (deploymentId as NSString).utf8String, -1, SQLITE_TRANSIENT)
-        sqlite3_bind_int(statement, 2, Int32(limit))
+        sqlite3_bind_int(statement, 2, Int32(clamping: limit))
 
         var rows: [DeploymentEvent] = []
 
@@ -148,7 +159,13 @@ public actor SQLiteDeploymentEventStore: DeploymentEventStore {
         )
 
         guard status == SQLITE_OK else {
-            throw DeployBarError.persistence("Failed to open SQLite database: \(sqliteErrorMessage())")
+            // sqlite3_open_v2 allocates a handle even on failure; close and nil
+            // it out so a subsequent call can retry instead of being stuck
+            // returning success from the `db != nil` early-return above.
+            let message = sqliteErrorMessage()
+            sqlite3_close(db)
+            db = nil
+            throw DeployBarError.persistence("Failed to open SQLite database: \(message)")
         }
     }
 
