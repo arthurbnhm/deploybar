@@ -133,8 +133,9 @@ extension DeployBarAppStore {
                 tokenError = nil
             }
 
-            try await env.eventStore.purge(olderThan: Date().addingTimeInterval(-7 * 24 * 60 * 60))
             await handleTransitions(update.transitions)
+            await env.monitoringEngine.markNotified(update.transitions)
+            await purgeOldEventsIfDue()
 
             return update.nextDelay
         } catch let error as DeployBarError {
@@ -199,6 +200,15 @@ extension DeployBarAppStore {
         )
     }
 
+    private func purgeOldEventsIfDue() async {
+        let purgeInterval: TimeInterval = 60 * 60
+        if let lastEventPurgeAt, Date().timeIntervalSince(lastEventPurgeAt) < purgeInterval {
+            return
+        }
+        lastEventPurgeAt = Date()
+        try? await env.eventStore.purge(olderThan: Date().addingTimeInterval(-7 * 24 * 60 * 60))
+    }
+
     func persistStatusCache(from statuses: [ProjectStatus], refreshedAt: Date) {
         let cachedStatuses = statuses.map { status in
             CachedProjectStatus(
@@ -208,7 +218,9 @@ extension DeployBarAppStore {
             )
         }
 
-        let shouldWriteStatuses = cachedStatuses != settings.cachedProjectStatuses
+        let shouldWriteStatuses = !cachedStatuses.elementsEqual(settings.cachedProjectStatuses) { new, old in
+            new.project == old.project && new.snapshot == old.snapshot
+        }
         let shouldWriteTimestamp: Bool
         if let previous = settings.statusCacheUpdatedAt {
             shouldWriteTimestamp = refreshedAt.timeIntervalSince(previous) >= 60

@@ -59,6 +59,7 @@ public final class DeployBarAppStore {
     var monitorTask: Task<Void, Never>?
     var hasStarted = false
     var consecutiveTransientAuthFailures = 0
+    var lastEventPurgeAt: Date?
 
     public init(environment: DeployBarEnvironment) {
         self.env = environment

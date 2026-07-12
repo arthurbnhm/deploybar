@@ -27,6 +27,13 @@ final class InMemoryTokenStore: SecureTokenStore, @unchecked Sendable {
 final class InMemorySettingsStore: SettingsStore, @unchecked Sendable {
     private let lock = NSLock()
     private var settings = AppSettings()
+    private var _saveCount = 0
+
+    var saveCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _saveCount
+    }
 
     func load() throws -> AppSettings {
         lock.lock()
@@ -37,6 +44,7 @@ final class InMemorySettingsStore: SettingsStore, @unchecked Sendable {
     func save(_ settings: AppSettings) throws {
         lock.lock()
         self.settings = settings
+        _saveCount += 1
         lock.unlock()
     }
 
@@ -49,6 +57,8 @@ final class InMemorySettingsStore: SettingsStore, @unchecked Sendable {
 
 actor InMemoryEventStore: DeploymentEventStore {
     private var byDeployment: [String: [DeploymentEvent]] = [:]
+    private var purgeError: Error?
+    private(set) var purgeCallCount = 0
 
     func persist(events: [DeploymentEvent]) async throws {
         for event in events {
@@ -61,6 +71,10 @@ actor InMemoryEventStore: DeploymentEventStore {
     }
 
     func purge(olderThan cutoff: Date) async throws {
+        purgeCallCount += 1
+        if let purgeError {
+            throw purgeError
+        }
         byDeployment = byDeployment.mapValues {
             $0.filter { $0.createdAt >= cutoff }
         }
@@ -68,6 +82,10 @@ actor InMemoryEventStore: DeploymentEventStore {
 
     func clear() async throws {
         byDeployment.removeAll()
+    }
+
+    func setPurgeError(_ error: Error?) {
+        purgeError = error
     }
 }
 

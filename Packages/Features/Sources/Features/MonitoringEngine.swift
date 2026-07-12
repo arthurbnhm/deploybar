@@ -47,6 +47,10 @@ public actor MonitoringEngine {
         self.client = client
     }
 
+    static func terminalKey(for snapshot: DeploymentSnapshot) -> String {
+        "\(snapshot.id):\(snapshot.stage.rawValue)"
+    }
+
     public func refresh(
         projects: [WatchedProject],
         profile: PollingProfile,
@@ -70,19 +74,47 @@ public actor MonitoringEngine {
         var transitions: [DeploymentTransition] = []
         var changed = false
 
-        for (index, project) in projects.enumerated() {
-            if index > 0 {
-                // Small jitter avoids bursting multiple project calls at exactly once.
-                try? await Task.sleep(nanoseconds: 50_000_000)
+        // Fetch phase: bounded-concurrency task group (politeness cap against Vercel rate limits).
+        let client = self.client
+        var snapshotsByIndex: [Int: DeploymentSnapshot?] = [:]
+        snapshotsByIndex.reserveCapacity(projects.count)
+
+        try await withThrowingTaskGroup(of: (Int, DeploymentSnapshot?).self) { group in
+            let maxConcurrent = 4
+            var nextIndex = 0
+
+            func addNext() {
+                guard nextIndex < projects.count else {
+                    return
+                }
+                let index = nextIndex
+                let project = projects[index]
+                nextIndex += 1
+                group.addTask {
+                    let snapshot = try await client.latestProductionDeployment(
+                        projectId: project.id,
+                        teamId: project.teamId
+                    )
+                    return (index, snapshot)
+                }
             }
 
-            let snapshot = try await client.latestProductionDeployment(
-                projectId: project.id,
-                teamId: project.teamId
-            )
+            for _ in 0..<min(maxConcurrent, projects.count) {
+                addNext()
+            }
+
+            while let result = try await group.next() {
+                snapshotsByIndex[result.0] = result.1
+                addNext()
+            }
+        }
+
+        // Fold phase: serial, in original project order — deterministic transition/statuses ordering.
+        for (index, project) in projects.enumerated() {
+            let snapshot = snapshotsByIndex[index] ?? nil
 
             let previous = lastSnapshots[project.id]
-            if previous?.id != snapshot?.id || previous?.stage != snapshot?.stage {
+            if let previous, previous.id != snapshot?.id || previous.stage != snapshot?.stage {
                 changed = true
             }
 
@@ -90,12 +122,11 @@ public actor MonitoringEngine {
                 lastSnapshots[project.id] = snapshot
 
                 if snapshot.stage.isTerminal {
-                    let key = "\(snapshot.id):\(snapshot.stage.rawValue)"
+                    let key = Self.terminalKey(for: snapshot)
                     if previous == nil {
                         // First observation for a project is baseline state: do not notify.
                         notifiedTerminalKeys.insert(key)
                     } else if !notifiedTerminalKeys.contains(key) {
-                        notifiedTerminalKeys.insert(key)
                         transitions.append(
                             DeploymentTransition(project: project, previous: previous, current: snapshot)
                         )
@@ -122,6 +153,12 @@ public actor MonitoringEngine {
             cadence: cadence,
             nextDelay: delay
         )
+    }
+
+    public func markNotified(_ transitions: [DeploymentTransition]) {
+        for transition in transitions {
+            notifiedTerminalKeys.insert(Self.terminalKey(for: transition.current))
+        }
     }
 
     public func resetState() {
