@@ -6,6 +6,7 @@ public protocol VercelClient: Sendable {
     func listProjects(teamId: String?, limit: Int, until: String?) async throws -> [Project]
     func latestProductionDeployment(projectId: String, teamId: String?) async throws -> DeploymentSnapshot?
     func deploymentEvents(deploymentId: String, limit: Int, since: Int?) async throws -> [DeploymentEvent]
+    func cancelDeployment(deploymentId: String, teamId: String?) async throws
 }
 
 public protocol SecureTokenStore: Sendable {

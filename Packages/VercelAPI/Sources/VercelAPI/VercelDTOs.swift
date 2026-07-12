@@ -50,6 +50,19 @@ struct TimestampPaginationDTO: Decodable {
 
 struct ContinuationPaginationDTO: Decodable {
     let next: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case next
+    }
+
+    init(from decoder: Decoder) throws {
+        let keyed = try decoder.container(keyedBy: CodingKeys.self)
+        if let numeric = try? keyed.decodeIfPresent(Int64.self, forKey: .next) {
+            self.next = String(numeric)
+        } else {
+            self.next = try keyed.decodeIfPresent(String.self, forKey: .next)
+        }
+    }
 }
 
 struct ProjectDTO: Decodable {
@@ -88,6 +101,14 @@ struct DeploymentMeta: Decodable {
     private enum CodingKeys: String, CodingKey {
         case githubCommitMessage = "githubCommitMessage"
     }
+}
+
+/// Minimal decode of the "Cancel a deployment" response. We only need to confirm the body
+/// parses as JSON; the store re-fetches fresh state via `manualRefresh()` after a cancel call
+/// rather than relying on this payload, so unrecognized fields are ignored by design.
+struct CancelDeploymentResponse: Decodable {
+    let id: String?
+    let readyState: String?
 }
 
 struct DeploymentEventListResponse: Decodable {
