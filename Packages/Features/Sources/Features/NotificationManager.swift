@@ -22,7 +22,7 @@ public actor MacNotificationRouter: NotificationRouting {
         }
     }
 
-    public func notify(title: String, body: String) async {
+    public func notify(title: String, body: String, userInfo: [String: String]) async {
         guard let center = notificationCenterIfAvailable() else {
             return
         }
@@ -44,6 +44,7 @@ public actor MacNotificationRouter: NotificationRouting {
         content.title = title
         content.body = body
         content.sound = .default
+        content.userInfo = userInfo
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,
@@ -88,6 +89,27 @@ public actor MacNotificationRouter: NotificationRouting {
     }
 }
 
+/// Bridges a notification click to the app's window-presentation layer.
+/// A notification is activated outside any SwiftUI view, so there's no
+/// `openWindow` action in hand at that point; the app registers a closure
+/// here (see `LogsPresenter` in DeployBarApp) that this router calls into.
+@MainActor
+public final class NotificationActivationRouter {
+    public static let shared = NotificationActivationRouter()
+
+    private var onActivate: ((String) -> Void)?
+
+    private init() {}
+
+    public func register(_ handler: @escaping (String) -> Void) {
+        onActivate = handler
+    }
+
+    func handleActivation(projectId: String) {
+        onActivate?(projectId)
+    }
+}
+
 private final class NotificationCenterDelegate: NSObject, UNUserNotificationCenterDelegate {
     func userNotificationCenter(
         _: UNUserNotificationCenter,
@@ -95,5 +117,19 @@ private final class NotificationCenterDelegate: NSObject, UNUserNotificationCent
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .sound, .badge, .list])
+    }
+
+    func userNotificationCenter(
+        _: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+        if let projectId = userInfo["projectId"] as? String {
+            Task { @MainActor in
+                NotificationActivationRouter.shared.handleActivation(projectId: projectId)
+            }
+        }
+        completionHandler()
     }
 }

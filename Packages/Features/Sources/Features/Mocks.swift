@@ -91,7 +91,7 @@ actor InMemoryEventStore: DeploymentEventStore {
 
 actor InMemoryNotificationRouter: NotificationRouting {
     func requestAuthorization() async -> Bool { true }
-    func notify(title _: String, body _: String) async {}
+    func notify(title _: String, body _: String, userInfo _: [String: String]) async {}
 }
 
 final class InMemorySoundPlayer: SoundPlayback, @unchecked Sendable {

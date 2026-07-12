@@ -29,7 +29,16 @@ public protocol DeploymentEventStore: Sendable {
 
 public protocol NotificationRouting: Sendable {
     func requestAuthorization() async -> Bool
-    func notify(title: String, body: String) async
+    func notify(title: String, body: String, userInfo: [String: String]) async
+}
+
+public extension NotificationRouting {
+    /// Convenience overload for callers that have no payload to attach.
+    /// Protocol requirements can't carry default argument values directly,
+    /// so this extension supplies the default via an overload instead.
+    func notify(title: String, body: String) async {
+        await notify(title: title, body: body, userInfo: [:])
+    }
 }
 
 public protocol SoundPlayback: Sendable {
