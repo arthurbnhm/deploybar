@@ -13,12 +13,18 @@ enum TransitionNotificationService {
         }
 
         for transition in transitions {
+            let userInfo = [
+                "projectId": transition.project.id,
+                "deploymentId": transition.current.id
+            ]
+
             switch transition.current.stage {
             case .ready:
                 if settings.notificationsEnabled {
                     await notificationRouter.notify(
                         title: "DeployBar: Success",
-                        body: "\(transition.project.name) deployed successfully."
+                        body: "\(transition.project.name) deployed successfully.",
+                        userInfo: userInfo
                     )
                 }
                 if settings.soundsEnabled {
@@ -29,7 +35,8 @@ enum TransitionNotificationService {
                 if settings.notificationsEnabled {
                     await notificationRouter.notify(
                         title: "DeployBar: Failed",
-                        body: "\(transition.project.name) deployment failed."
+                        body: "\(transition.project.name) deployment failed.",
+                        userInfo: userInfo
                     )
                 }
                 if settings.soundsEnabled {

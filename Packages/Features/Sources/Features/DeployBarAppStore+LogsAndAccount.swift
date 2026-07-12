@@ -39,6 +39,21 @@ extension DeployBarAppStore {
         }
     }
 
+    /// Resolves a project by id against the live `projectStatuses` (not the
+    /// notified deployment id) and opens its current logs. A notification's
+    /// deployment may no longer be the project's latest by the time it's
+    /// clicked, so this intentionally shows the current state rather than
+    /// pinning to the stale notified deployment.
+    @discardableResult
+    public func openLogsForProject(id: String) async -> Bool {
+        guard let status = projectStatuses.first(where: { $0.project.id == id }) else {
+            return false
+        }
+
+        await openLogs(for: status)
+        return true
+    }
+
     public func closeLogs() {
         selectedLogsProject = nil
         selectedLogsDeployment = nil

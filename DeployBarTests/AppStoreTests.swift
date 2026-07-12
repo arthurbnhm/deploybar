@@ -5,7 +5,7 @@ import XCTest
 private actor NotificationSpyRouter: NotificationRouting {
     private let granted: Bool
     private var authorizationRequests = 0
-    private var delivered: [(title: String, body: String)] = []
+    private var delivered: [(title: String, body: String, userInfo: [String: String])] = []
 
     init(granted: Bool) {
         self.granted = granted
@@ -16,8 +16,8 @@ private actor NotificationSpyRouter: NotificationRouting {
         return granted
     }
 
-    func notify(title: String, body: String) async {
-        delivered.append((title: title, body: body))
+    func notify(title: String, body: String, userInfo: [String: String]) async {
+        delivered.append((title: title, body: body, userInfo: userInfo))
     }
 
     func notificationCount() async -> Int {
@@ -26,6 +26,10 @@ private actor NotificationSpyRouter: NotificationRouting {
 
     func authorizationRequestCount() async -> Int {
         authorizationRequests
+    }
+
+    func lastUserInfo() async -> [String: String]? {
+        delivered.last?.userInfo
     }
 }
 
@@ -497,6 +501,34 @@ final class AppStoreTests: XCTestCase {
         await waitForNotificationCount(1, spy: spy)
         let notificationCount = await spy.notificationCount()
         XCTAssertEqual(notificationCount, 1)
+    }
+
+    func testDeploymentTransitionNotificationCarriesProjectAndDeploymentUserInfo() async throws {
+        let spy = NotificationSpyRouter(granted: true)
+        let store = makeStore(
+            notificationRouter: spy,
+            client: TransitioningMockVercelClient()
+        )
+
+        let didConnect = await store.updateToken("token_live")
+        XCTAssertTrue(didConnect)
+
+        store.toggleProjectSelection("proj_1")
+        store.updateWatchedProjects()
+        XCTAssertEqual(store.phase, .running)
+        store.monitorTask?.cancel()
+        store.monitorTask = nil
+
+        // Baseline observation: building. No transition yet.
+        _ = await store.performRefreshCycle()
+
+        // building -> ready: a transition that should carry projectId/deploymentId userInfo.
+        _ = await store.performRefreshCycle()
+
+        await waitForNotificationCount(1, spy: spy)
+        let userInfo = await spy.lastUserInfo()
+        XCTAssertEqual(userInfo?["projectId"], "proj_1")
+        XCTAssertEqual(userInfo?["deploymentId"], "dep_ready")
     }
 
     func testConsecutiveRefreshCyclesThrottlePurgeToOncePerHour() async throws {
