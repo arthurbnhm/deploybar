@@ -47,6 +47,10 @@ public actor MonitoringEngine {
         self.client = client
     }
 
+    static func terminalKey(for snapshot: DeploymentSnapshot) -> String {
+        "\(snapshot.id):\(snapshot.stage.rawValue)"
+    }
+
     public func refresh(
         projects: [WatchedProject],
         profile: PollingProfile,
@@ -90,12 +94,11 @@ public actor MonitoringEngine {
                 lastSnapshots[project.id] = snapshot
 
                 if snapshot.stage.isTerminal {
-                    let key = "\(snapshot.id):\(snapshot.stage.rawValue)"
+                    let key = Self.terminalKey(for: snapshot)
                     if previous == nil {
                         // First observation for a project is baseline state: do not notify.
                         notifiedTerminalKeys.insert(key)
                     } else if !notifiedTerminalKeys.contains(key) {
-                        notifiedTerminalKeys.insert(key)
                         transitions.append(
                             DeploymentTransition(project: project, previous: previous, current: snapshot)
                         )
@@ -122,6 +125,12 @@ public actor MonitoringEngine {
             cadence: cadence,
             nextDelay: delay
         )
+    }
+
+    public func markNotified(_ transitions: [DeploymentTransition]) {
+        for transition in transitions {
+            notifiedTerminalKeys.insert(Self.terminalKey(for: transition.current))
+        }
     }
 
     public func resetState() {
