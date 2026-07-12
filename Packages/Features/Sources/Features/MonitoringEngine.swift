@@ -114,7 +114,7 @@ public actor MonitoringEngine {
             let snapshot = snapshotsByIndex[index] ?? nil
 
             let previous = lastSnapshots[project.id]
-            if previous?.id != snapshot?.id || previous?.stage != snapshot?.stage {
+            if let previous, previous.id != snapshot?.id || previous.stage != snapshot?.stage {
                 changed = true
             }
 
