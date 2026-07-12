@@ -218,7 +218,9 @@ extension DeployBarAppStore {
             )
         }
 
-        let shouldWriteStatuses = cachedStatuses != settings.cachedProjectStatuses
+        let shouldWriteStatuses = !cachedStatuses.elementsEqual(settings.cachedProjectStatuses) { new, old in
+            new.project == old.project && new.snapshot == old.snapshot
+        }
         let shouldWriteTimestamp: Bool
         if let previous = settings.statusCacheUpdatedAt {
             shouldWriteTimestamp = refreshedAt.timeIntervalSince(previous) >= 60
