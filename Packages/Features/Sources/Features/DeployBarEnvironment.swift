@@ -43,7 +43,7 @@ public struct DeployBarEnvironment {
         })
 
         let notificationRouter = MacNotificationRouter()
-        let soundPlayer = SystemSoundPlayer()
+        let soundPlayer = DesignedSoundPlayer()
         let launchAtLogin = LaunchAtLoginManager()
         let monitoringEngine = MonitoringEngine(client: vercelClient)
 

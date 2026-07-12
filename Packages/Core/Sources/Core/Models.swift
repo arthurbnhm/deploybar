@@ -218,10 +218,22 @@ public struct CachedProjectStatus: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
+public enum SoundTheme: String, Codable, Sendable, CaseIterable {
+    case aurora
+    case pulse
+    case classic
+}
+
+public enum SoundEvent: String, Sendable, CaseIterable {
+    case success
+    case failure
+}
+
 public struct AppSettings: Codable, Sendable, Equatable {
     public var pollingProfile: PollingProfile
     public var notificationsEnabled: Bool
     public var soundsEnabled: Bool
+    public var soundTheme: SoundTheme
     public var launchAtLogin: Bool
     public var watchedProjects: [WatchedProject]
     public var selectedScope: TeamScope
@@ -232,6 +244,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         case pollingProfile
         case notificationsEnabled
         case soundsEnabled
+        case soundTheme
         case launchAtLogin
         case watchedProjects
         case selectedScope
@@ -243,6 +256,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         pollingProfile: PollingProfile = .balanced,
         notificationsEnabled: Bool = true,
         soundsEnabled: Bool = true,
+        soundTheme: SoundTheme = .aurora,
         launchAtLogin: Bool = false,
         watchedProjects: [WatchedProject] = [],
         selectedScope: TeamScope = .personal,
@@ -252,6 +266,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         self.pollingProfile = pollingProfile
         self.notificationsEnabled = notificationsEnabled
         self.soundsEnabled = soundsEnabled
+        self.soundTheme = soundTheme
         self.launchAtLogin = launchAtLogin
         self.watchedProjects = watchedProjects
         self.selectedScope = selectedScope
@@ -264,6 +279,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         pollingProfile = try container.decodeIfPresent(PollingProfile.self, forKey: .pollingProfile) ?? .balanced
         notificationsEnabled = try container.decodeIfPresent(Bool.self, forKey: .notificationsEnabled) ?? true
         soundsEnabled = try container.decodeIfPresent(Bool.self, forKey: .soundsEnabled) ?? true
+        soundTheme = try container.decodeIfPresent(SoundTheme.self, forKey: .soundTheme) ?? .aurora
         launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
         watchedProjects = try container.decodeIfPresent([WatchedProject].self, forKey: .watchedProjects) ?? []
         selectedScope = try container.decodeIfPresent(TeamScope.self, forKey: .selectedScope) ?? .personal
@@ -276,6 +292,7 @@ public struct AppSettings: Codable, Sendable, Equatable {
         try container.encode(pollingProfile, forKey: .pollingProfile)
         try container.encode(notificationsEnabled, forKey: .notificationsEnabled)
         try container.encode(soundsEnabled, forKey: .soundsEnabled)
+        try container.encode(soundTheme, forKey: .soundTheme)
         try container.encode(launchAtLogin, forKey: .launchAtLogin)
         try container.encode(watchedProjects, forKey: .watchedProjects)
         try container.encode(selectedScope, forKey: .selectedScope)

@@ -28,7 +28,7 @@ enum TransitionNotificationService {
                     )
                 }
                 if settings.soundsEnabled {
-                    soundPlayer.playSuccess()
+                    soundPlayer.play(.success, theme: settings.soundTheme)
                 }
 
             case .failed:
@@ -40,7 +40,7 @@ enum TransitionNotificationService {
                     )
                 }
                 if settings.soundsEnabled {
-                    soundPlayer.playFailure()
+                    soundPlayer.play(.failure, theme: settings.soundTheme)
                 }
 
             default:

@@ -43,6 +43,22 @@ extension DeployBarAppStore {
         persistSettings()
     }
 
+    public func updateSoundTheme(_ theme: SoundTheme) {
+        guard settings.soundTheme != theme else {
+            return
+        }
+        settings.soundTheme = theme
+        persistSettings()
+        // Audition the new theme immediately, matching the system alert-sound picker.
+        previewSound(.success)
+    }
+
+    /// Plays a sound for auditioning in Settings. Intentionally ignores
+    /// `soundsEnabled` so users can try themes before turning sounds on.
+    public func previewSound(_ event: SoundEvent) {
+        env.soundPlayer.play(event, theme: settings.soundTheme)
+    }
+
     public func updateLaunchAtLogin(_ enabled: Bool) {
         let previousValue = settings.launchAtLogin
         do {

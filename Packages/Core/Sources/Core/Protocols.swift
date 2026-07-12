@@ -43,8 +43,7 @@ public extension NotificationRouting {
 }
 
 public protocol SoundPlayback: Sendable {
-    func playSuccess()
-    func playFailure()
+    func play(_ event: SoundEvent, theme: SoundTheme)
 }
 
 public protocol LaunchAtLoginControlling: Sendable {

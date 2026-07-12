@@ -9,7 +9,7 @@ DeployBar is a native macOS menu bar app for monitoring Vercel production deploy
 - Personal and team scope project selection (up to 20 projects)
 - Dynamic menu bar status icon
 - Smart polling profiles (Balanced, Aggressive, Eco)
-- Local notifications and subtle sound effects
+- Local notifications with designed alert sounds (three selectable themes, preview in Settings)
 - Embedded deployment event logs
 - Local-only persistence (settings JSON + SQLite cache)
 - One-click disconnect for clearing token, settings, cached statuses, and local logs

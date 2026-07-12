@@ -95,8 +95,20 @@ actor InMemoryNotificationRouter: NotificationRouting {
 }
 
 final class InMemorySoundPlayer: SoundPlayback, @unchecked Sendable {
-    func playSuccess() {}
-    func playFailure() {}
+    private let lock = NSLock()
+    private var recorded: [(event: SoundEvent, theme: SoundTheme)] = []
+
+    var played: [(event: SoundEvent, theme: SoundTheme)] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recorded
+    }
+
+    func play(_ event: SoundEvent, theme: SoundTheme) {
+        lock.lock()
+        recorded.append((event: event, theme: theme))
+        lock.unlock()
+    }
 }
 
 final class InMemoryLaunchAtLoginController: LaunchAtLoginControlling, @unchecked Sendable {

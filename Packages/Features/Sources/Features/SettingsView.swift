@@ -262,15 +262,43 @@ private struct MonitoringSettingsPane: View {
                     get: { store.settings.notificationsEnabled },
                     set: { store.updateNotificationsEnabled($0) }
                 ))
-
-                Toggle("Sound Effects", isOn: Binding(
-                    get: { store.settings.soundsEnabled },
-                    set: { store.updateSoundsEnabled($0) }
-                ))
             } header: {
                 Text("Alerts")
             } footer: {
                 Text("Get notified when deployments succeed or fail.")
+            }
+
+            Section {
+                Toggle("Sound Effects", isOn: Binding(
+                    get: { store.settings.soundsEnabled },
+                    set: { store.updateSoundsEnabled($0) }
+                ))
+
+                Picker("Theme", selection: Binding(
+                    get: { store.settings.soundTheme },
+                    set: { store.updateSoundTheme($0) }
+                )) {
+                    ForEach(SoundTheme.allCases, id: \.self) { theme in
+                        Text(theme.displayName).tag(theme)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                SoundPreviewRow(
+                    title: "Deploy succeeded",
+                    systemImage: "checkmark.circle.fill",
+                    tint: .green
+                ) { store.previewSound(.success) }
+
+                SoundPreviewRow(
+                    title: "Deploy failed",
+                    systemImage: "xmark.circle.fill",
+                    tint: .red
+                ) { store.previewSound(.failure) }
+            } header: {
+                Text("Sounds")
+            } footer: {
+                Text("Aurora and Pulse are DeployBar's designed chimes; Classic keeps the original system sounds. Previews play even while Sound Effects is off.")
             }
 
             Section {
@@ -298,6 +326,39 @@ private struct MonitoringSettingsPane: View {
         case .eco: "Power-saving mode with slower idle cadence. Best for battery life."
         case .balanced: "Adaptive updates with balanced API usage. Recommended for most users."
         case .aggressive: "Near real-time updates with the highest API usage."
+        }
+    }
+}
+
+private struct SoundPreviewRow: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+    let action: () -> Void
+    @State private var playCount = 0
+
+    var body: some View {
+        HStack {
+            Label {
+                Text(title)
+            } icon: {
+                Image(systemName: systemImage)
+                    .foregroundStyle(tint)
+            }
+
+            Spacer()
+
+            Button {
+                playCount += 1
+                action()
+            } label: {
+                Image(systemName: "play.circle.fill")
+                    .font(.title3)
+                    .symbolRenderingMode(.hierarchical)
+                    .symbolEffect(.bounce, value: playCount)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Play the \(title) sound")
         }
     }
 }
