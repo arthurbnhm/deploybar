@@ -47,6 +47,36 @@ final class VercelAPIClientPaginationTests: XCTestCase {
             if query["until"] == nil {
                 return (
                     200,
+                    #"{"projects":[{"id":"project_1","name":"One","accountId":"team_1","updatedAt":1739000000000}],"pagination":{"count":1,"next":1739000000500}}"#
+                )
+            }
+
+            XCTAssertEqual(query["until"], "1739000000500")
+            return (
+                200,
+                #"{"projects":[{"id":"project_2","name":"Two","accountId":"team_1","updatedAt":1739000001000}],"pagination":{"count":1,"next":null}}"#
+            )
+        }
+
+        let client = makeClient()
+        let projects = try await client.listProjects(teamId: "team_1", limit: 1, until: nil)
+
+        XCTAssertEqual(projects.map(\.id), ["project_1", "project_2"])
+        XCTAssertEqual(recorder.requests.count, 2)
+        XCTAssertTrue(recorder.requests.allSatisfy { $0.url?.path == "/v10/projects" })
+    }
+
+    func testListProjectsAcceptsStringCursor() async throws {
+        let recorder = RequestRecorder()
+        StubURLProtocol.handler = { request in
+            recorder.record(request)
+
+            let query = request.queryItems
+            XCTAssertEqual(query["teamId"], "team_1")
+
+            if query["until"] == nil {
+                return (
+                    200,
                     #"{"projects":[{"id":"project_1","name":"One","accountId":"team_1","updatedAt":1739000000000}],"pagination":{"count":1,"next":"cursor_2"}}"#
                 )
             }
@@ -64,6 +94,24 @@ final class VercelAPIClientPaginationTests: XCTestCase {
         XCTAssertEqual(projects.map(\.id), ["project_1", "project_2"])
         XCTAssertEqual(recorder.requests.count, 2)
         XCTAssertTrue(recorder.requests.allSatisfy { $0.url?.path == "/v10/projects" })
+    }
+
+    func testListProjectsStopsOnNullCursor() async throws {
+        let recorder = RequestRecorder()
+        StubURLProtocol.handler = { request in
+            recorder.record(request)
+
+            return (
+                200,
+                #"{"projects":[{"id":"project_1","name":"One","accountId":"team_1","updatedAt":1739000000000}],"pagination":{"count":1,"next":null}}"#
+            )
+        }
+
+        let client = makeClient()
+        let projects = try await client.listProjects(teamId: "team_1", limit: 1, until: nil)
+
+        XCTAssertEqual(projects.map(\.id), ["project_1"])
+        XCTAssertEqual(recorder.requests.count, 1)
     }
 
     private func makeClient() -> VercelAPIClient {
