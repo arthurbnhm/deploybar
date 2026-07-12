@@ -7,14 +7,19 @@ on:
 
 jobs:
   test:
-    runs-on: macos-14
+    runs-on: macos-26
 
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
+      - name: Select Xcode 26
+        run: |
+          XCODE_PATH=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE_PATH"
+          SDK_VERSION=$(xcrun --show-sdk-version --sdk macosx)
+          echo "Selected $XCODE_PATH with macOS SDK $SDK_VERSION"
+          [ "${SDK_VERSION%%.*}" -ge 26 ] || { echo "macOS SDK >= 26 required"; exit 1; }
 
       - name: Build (arm64)
         run: swift build --arch arm64

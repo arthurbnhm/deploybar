@@ -98,6 +98,10 @@ final class SurfaceSnapshotTests: XCTestCase {
     }
 
     func testSnapshotPopover() throws {
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["SKIP_SNAPSHOT_TESTS"] == "1",
+            "Snapshot rendering skipped via SKIP_SNAPSHOT_TESTS"
+        )
         let store = populatedStore()
         try snapshotFittingHeight(
             MenuBarContentView(store: store),
@@ -126,6 +130,10 @@ final class SurfaceSnapshotTests: XCTestCase {
     }
 
     func testSnapshotSettings() throws {
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["SKIP_SNAPSHOT_TESTS"] == "1",
+            "Snapshot rendering skipped via SKIP_SNAPSHOT_TESTS"
+        )
         let store = populatedStore()
         try snapshotWindow(
             DeployBarSettingsView(store: store),
@@ -140,6 +148,10 @@ final class SurfaceSnapshotTests: XCTestCase {
     }
 
     func testSnapshotLogs() throws {
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["SKIP_SNAPSHOT_TESTS"] == "1",
+            "Snapshot rendering skipped via SKIP_SNAPSHOT_TESTS"
+        )
         let store = populatedStore()
         let now = Date()
         store.selectedLogsProject = store.settings.watchedProjects[0]
