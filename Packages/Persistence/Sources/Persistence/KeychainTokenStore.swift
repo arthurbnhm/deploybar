@@ -34,12 +34,51 @@ public final class KeychainTokenStore: SecureTokenStore {
     }
 
     public func readToken() throws -> String? {
-        var query = baseQuery
-        query[kSecReturnData as String] = kCFBooleanTrue
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        if let token = try readToken(dataProtection: true) {
+            return token
+        }
+
+        // Migration path: pre-existing installs stored the token in the legacy
+        // file-based keychain (no kSecUseDataProtectionKeychain). If found,
+        // migrate it into the data-protection keychain and remove the legacy
+        // copy. Never fail auth over a migration hiccup — fall back to the
+        // legacy value so the next successful save migrates it.
+        guard let legacyToken = try readToken(dataProtection: false) else {
+            return nil
+        }
+
+        do {
+            try saveToken(legacyToken)
+            let legacyDeleteStatus = SecItemDelete(query(dataProtection: false) as CFDictionary)
+            guard legacyDeleteStatus == errSecSuccess || legacyDeleteStatus == errSecItemNotFound else {
+                return legacyToken
+            }
+        } catch {
+            return legacyToken
+        }
+
+        return legacyToken
+    }
+
+    public func clearToken() throws {
+        let status = SecItemDelete(baseQuery as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw DeployBarError.persistence("Unable to clear token from Keychain (\(status)).")
+        }
+
+        let legacyStatus = SecItemDelete(query(dataProtection: false) as CFDictionary)
+        guard legacyStatus == errSecSuccess || legacyStatus == errSecItemNotFound else {
+            throw DeployBarError.persistence("Unable to clear legacy token from Keychain (\(legacyStatus)).")
+        }
+    }
+
+    private func readToken(dataProtection: Bool) throws -> String? {
+        var lookupQuery = query(dataProtection: dataProtection)
+        lookupQuery[kSecReturnData as String] = kCFBooleanTrue
+        lookupQuery[kSecMatchLimit as String] = kSecMatchLimitOne
 
         var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        let status = SecItemCopyMatching(lookupQuery as CFDictionary, &item)
 
         guard status != errSecItemNotFound else {
             return nil
@@ -56,18 +95,21 @@ public final class KeychainTokenStore: SecureTokenStore {
         return token
     }
 
-    public func clearToken() throws {
-        let status = SecItemDelete(baseQuery as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw DeployBarError.persistence("Unable to clear token from Keychain (\(status)).")
-        }
+    private var baseQuery: [String: Any] {
+        query(dataProtection: true)
     }
 
-    private var baseQuery: [String: Any] {
-        [
+    private func query(dataProtection: Bool) -> [String: Any] {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
+
+        if dataProtection {
+            query[kSecUseDataProtectionKeychain as String] = true
+        }
+
+        return query
     }
 }
