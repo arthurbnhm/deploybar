@@ -380,14 +380,30 @@ public struct MenuBarContentView: View {
 }
 
 /// Compact relative timestamp ("45 min. ago") that refreshes once a minute.
+///
+/// The rendered string must depend on `TimelineView.Context.date`. Returning a
+/// `Text` built only from the deployment date produces the same SwiftUI value on
+/// every timeline tick, so the menu can keep showing the old relative time until
+/// another interaction rebuilds the row.
 private struct RelativeTimeText: View {
     let date: Date
 
     var body: some View {
-        TimelineView(.everyMinute) { _ in
-            Text(date, format: .relative(presentation: .named, unitsStyle: .abbreviated))
+        TimelineView(.everyMinute) { context in
+            Text(relativeTimeLabel(for: date, relativeTo: context.date))
         }
     }
+}
+
+func relativeTimeLabel(
+    for date: Date,
+    relativeTo referenceDate: Date,
+    locale: Locale = .current
+) -> String {
+    let formatter = RelativeDateTimeFormatter()
+    formatter.locale = locale
+    formatter.unitsStyle = .abbreviated
+    return formatter.localizedString(for: date, relativeTo: referenceDate)
 }
 
 private struct NoticeStrip: View {
