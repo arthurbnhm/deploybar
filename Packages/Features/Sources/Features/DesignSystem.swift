@@ -8,6 +8,10 @@ import SwiftUI
 /// appearance, vibrancy, and accessibility settings for free.
 enum DesignSystem {
     static let popoverWidth: CGFloat = 380
+    static let projectListMaximumHeight: CGFloat = 360
+    static let projectRowEstimatedHeight: CGFloat = 54
+    static let projectRowSpacing: CGFloat = 4
+    static let projectListVerticalPadding: CGFloat = 8
     static let cornerRadius: CGFloat = 10
     static let rowCornerRadius: CGFloat = 8
     static let sectionSpacing: CGFloat = 14

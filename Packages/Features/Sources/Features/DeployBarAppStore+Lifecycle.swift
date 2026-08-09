@@ -290,7 +290,7 @@ extension DeployBarAppStore {
             return "This Vercel token is invalid or no longer authorized."
         case .missingToken:
             return Self.defaultTokenPrompt
-        case .forbiddenAction, .rateLimited, .networking, .persistence, .unsupportedArchitecture:
+        case .forbiddenAction, .projectNotFound, .rateLimited, .networking, .persistence, .unsupportedArchitecture:
             return nil
         }
     }
@@ -303,7 +303,7 @@ extension DeployBarAppStore {
         switch deployError {
         case .unauthorized, .invalidToken:
             return true
-        case .missingToken, .forbiddenAction, .rateLimited, .networking, .persistence, .unsupportedArchitecture:
+        case .missingToken, .forbiddenAction, .projectNotFound, .rateLimited, .networking, .persistence, .unsupportedArchitecture:
             return false
         }
     }

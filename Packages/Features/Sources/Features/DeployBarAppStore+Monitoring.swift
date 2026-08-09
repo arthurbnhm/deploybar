@@ -160,6 +160,10 @@ extension DeployBarAppStore {
             }
 
             switch error {
+            case let .projectNotFound(projectID):
+                monitorError = nil
+                removeUnavailableProject(projectID)
+                return settings.watchedProjects.isEmpty ? settings.pollingProfile.idleInterval : 0
             case let .rateLimited(resetAt):
                 monitorError = error.localizedDescription
                 monitorCadence = .idle
@@ -205,6 +209,15 @@ extension DeployBarAppStore {
             monitorError = error.localizedDescription
             return settings.pollingProfile.activeInterval
         }
+    }
+
+    private func removeUnavailableProject(_ projectID: String) {
+        settings.watchedProjects.removeAll { $0.id == projectID }
+        selectedProjectIDs.remove(projectID)
+        availableProjects.removeAll { $0.id == projectID }
+        _ = pruneCachedStatusesToWatchedProjects()
+        aggregateStatus = aggregateStatus(for: projectStatuses)
+        persistSettings()
     }
 
     func handleTransitions(_ transitions: [DeploymentTransition]) async {

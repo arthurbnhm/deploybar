@@ -5,6 +5,7 @@ public enum DeployBarError: Error, LocalizedError, Sendable {
     case invalidToken
     case unauthorized
     case forbiddenAction
+    case projectNotFound(projectID: String)
     case rateLimited(resetAt: Date)
     case networking(String)
     case persistence(String)
@@ -20,6 +21,8 @@ public enum DeployBarError: Error, LocalizedError, Sendable {
             return "The Vercel token is no longer authorized."
         case .forbiddenAction:
             return "Your Vercel token doesn't have permission to perform this action."
+        case .projectNotFound:
+            return "A watched Vercel project no longer exists or is no longer accessible."
         case let .rateLimited(resetAt):
             return "Rate limited by Vercel API until \(resetAt.formatted(date: .omitted, time: .shortened))."
         case let .networking(message):

@@ -122,7 +122,11 @@ public final class VercelAPIClient: VercelClient {
         }
 
         let request = try makeRequest(path: "/v6/deployments", queryItems: queryItems)
-        let payload: DeploymentListResponse = try await send(request, as: DeploymentListResponse.self)
+        let payload: DeploymentListResponse = try await send(
+            request,
+            as: DeploymentListResponse.self,
+            projectIDIfNotFound: projectId
+        )
 
         guard let deployment = payload.deployments.first else {
             return nil
@@ -203,7 +207,8 @@ public final class VercelAPIClient: VercelClient {
     private func send<T: Decodable>(
         _ request: URLRequest,
         as type: T.Type,
-        mapForbiddenAsWriteFailure: Bool = false
+        mapForbiddenAsWriteFailure: Bool = false,
+        projectIDIfNotFound: String? = nil
     ) async throws -> T {
         let (data, response): (Data, URLResponse)
         do {
@@ -241,9 +246,30 @@ public final class VercelAPIClient: VercelClient {
                 .map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? Date().addingTimeInterval(30)
             throw DeployBarError.rateLimited(resetAt: resetTimestamp)
 
+        case 404:
+            let vercelError = try? decoder.decode(VercelErrorResponse.self, from: data)
+            if let projectIDIfNotFound,
+               vercelError?.error.code == "not_found",
+               vercelError?.error.message.localizedCaseInsensitiveContains("project") == true
+            {
+                throw DeployBarError.projectNotFound(projectID: projectIDIfNotFound)
+            }
+
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw DeployBarError.networking("Vercel API error 404: \(body)")
+
         default:
             let body = String(data: data, encoding: .utf8) ?? ""
             throw DeployBarError.networking("Vercel API error \(http.statusCode): \(body)")
         }
+    }
+}
+
+private struct VercelErrorResponse: Decodable {
+    let error: ErrorPayload
+
+    struct ErrorPayload: Decodable {
+        let code: String
+        let message: String
     }
 }

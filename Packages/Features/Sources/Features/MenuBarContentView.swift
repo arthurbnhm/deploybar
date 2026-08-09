@@ -181,7 +181,7 @@ public struct MenuBarContentView: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                 }
-                .frame(maxHeight: 360)
+                .frame(height: projectListHeight)
             }
         } else if store.isInitialRefreshInFlight {
             loadingState(message: "Syncing deployments…")
@@ -190,6 +190,14 @@ public struct MenuBarContentView: View {
         } else {
             loadingState(message: "Loading deployments…")
         }
+    }
+
+    private var projectListHeight: CGFloat {
+        let visibleRowCount = min(store.projectStatuses.count, 6)
+        let rowsHeight = CGFloat(visibleRowCount) * DesignSystem.projectRowEstimatedHeight
+        let spacingHeight = CGFloat(max(0, visibleRowCount - 1)) * DesignSystem.projectRowSpacing
+        let contentHeight = rowsHeight + spacingHeight + DesignSystem.projectListVerticalPadding
+        return min(contentHeight, DesignSystem.projectListMaximumHeight)
     }
 
     private func emptyState(systemImage: String, message: String) -> some View {

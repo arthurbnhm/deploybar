@@ -25,7 +25,7 @@ enum AuthBootstrapService {
         switch deployError {
         case .unauthorized, .invalidToken, .missingToken:
             return true
-        case .forbiddenAction, .rateLimited, .networking, .persistence, .unsupportedArchitecture:
+        case .forbiddenAction, .projectNotFound, .rateLimited, .networking, .persistence, .unsupportedArchitecture:
             return false
         }
     }
