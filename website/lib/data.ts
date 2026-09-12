@@ -66,5 +66,7 @@ export const FEATURES: Feature[] = [
   },
 ];
 
-export const GITHUB_REPO_URL = "https://github.com/arthurbnhm/DeployBar";
-export const MAC_DOWNLOAD_URL = `${GITHUB_REPO_URL}/releases/latest`;
+export const SITE_URL = "https://deploybar.com";
+export const GITHUB_REPO_URL = "https://github.com/arthurbnhm/deploybar";
+export const RELEASE_URL = `${GITHUB_REPO_URL}/releases/latest`;
+export const MAC_DOWNLOAD_URL = `${GITHUB_REPO_URL}/releases/latest/download/DeployBar.zip`;

@@ -18,21 +18,33 @@ DeployBar is a native macOS menu bar app for monitoring Vercel production deploy
 
 - macOS 26+ (Tahoe)
 - Apple Silicon (`arm64`) target for V1
-- Xcode 26+ / Swift 6.2+
 
 ## Download
 
-A public app release has not been published yet. You can build from source using
-the instructions below. When a verified release is available, it will appear on
-[GitHub Releases](https://github.com/arthurbnhm/DeployBar/releases/latest).
+Download from [deploybar.com](https://deploybar.com) or
+[GitHub Releases](https://github.com/arthurbnhm/deploybar/releases/latest).
 
-Public release artifacts must be Developer ID signed and notarized. Local or
-ad-hoc signed bundles are for development only. See the
-[publication checklist](docs/PUBLISHING.md) for the remaining release gates.
+**The current release is an unsigned preview.** It is ad-hoc signed for Apple
+Silicon execution, but has no Apple Developer ID signature and is not notarized.
+Unzip the download, move DeployBar to Applications, and try opening it once.
+If macOS blocks it, use **System Settings → Privacy & Security → Open Anyway**
+for DeployBar. Only approve a copy downloaded from this project. See the
+[installation guide](docs/INSTALLATION.md) and the checksum attached to the release.
+
+Homebrew installs the same unsigned build:
+
+```bash
+brew install --cask arthurbnhm/deploybar/deploybar
+```
 
 ## Build
 
+Building from source requires Xcode 26+ / Swift 6.2+. The downloaded app does not
+require Xcode or Apple Developer membership.
+
 ```bash
+git clone https://github.com/arthurbnhm/deploybar.git
+cd deploybar
 swift build
 ```
 
@@ -66,8 +78,18 @@ ALLOW_ADHOC_SIGNING=1 ./scripts/install_app.sh
 
 ## Package a Public Release
 
-Public downloads need a Developer ID Application certificate and Apple
-notarization so Gatekeeper and Keychain can validate the app identity.
+An explicitly labeled unsigned preview does not require Apple Developer membership:
+
+```bash
+./scripts/package_release.sh --unsigned
+```
+
+This creates `dist/DeployBar.zip` and `dist/DeployBar.zip.sha256` and renders the
+Homebrew cask. It does not install or publish the files.
+
+The separate Developer ID signed and notarized release path requires Apple
+Developer membership and a Developer ID Application certificate. This also
+applies to direct downloads outside the Mac App Store.
 
 Create a notarytool profile once:
 
@@ -84,9 +106,9 @@ Then create the release zip:
 NOTARY_PROFILE=deploybar-notary ./scripts/package_release.sh
 ```
 
-The release script refuses to run without a `Developer ID Application` signing
-identity. `SKIP_NOTARIZATION=1` is only for local packaging checks and must not
-be uploaded for users.
+The default release path requires a `Developer ID Application` identity.
+`SKIP_NOTARIZATION=1` remains a local dry run; use `--unsigned` for the unsigned
+preview path. See the [publication checklist](docs/PUBLISHING.md).
 
 ## Test
 

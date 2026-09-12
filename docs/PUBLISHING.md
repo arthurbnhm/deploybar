@@ -26,22 +26,39 @@ checklist does not publish the repository, upload an artifact, or enable a tap.
 GitHub documents this feature for public repositories:
 [Configure private vulnerability reporting](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository).
 
-## Binary release
+## Direct-download release
 
 1. Complete the source checks and app QA, including Keychain, account changes,
    delayed responses during disconnect, logs, notifications, and sleep/wake.
-2. Set `VERSION`, then run `NOTARY_PROFILE=deploybar-notary
-   ./scripts/package_release.sh` with a Developer ID Application certificate.
-3. Require successful notarization, stapling, and Gatekeeper assessment. Never
-   publish an artifact made with `SKIP_NOTARIZATION=1` or ad-hoc signing.
-4. Install the produced zip on a clean macOS 26+ Apple Silicon environment and
-   verify first launch, token save, monitoring, and upgrading an existing install.
-5. Publish the verified `DeployBar.zip` and checksum in the matching GitHub
-   release, then verify the README, website download link, and in-app update check.
-6. If distributing with Homebrew, publish the generated cask in a real tap,
-   verify its checksum matches the release asset, and test an installation.
+2. Set `VERSION` and explicitly choose the distribution path:
+   - **Unsigned preview:** `./scripts/package_release.sh --unsigned` uses an
+     ad-hoc signature and needs no Apple Developer membership. Disclose that it
+     is unsigned and not notarized in the website and release notes, with a
+     link to `docs/INSTALLATION.md`.
+   - **Developer ID:** `NOTARY_PROFILE=deploybar-notary ./scripts/package_release.sh`
+     requires a Developer ID Application certificate, successful notarization,
+     stapling, and Gatekeeper assessment.
+3. Verify bundle signature and zip integrity. `SKIP_NOTARIZATION=1` remains a
+   local dry run; do not publish it as a signed/notarized release.
+4. Test first launch, token save, monitoring, and upgrades on macOS 26+ Apple
+   Silicon. For unsigned releases, record Gatekeeper's expected rejection and
+   the per-app approval requirement. State explicitly when clean-machine or
+   full upgrade testing has not been performed.
+5. Publish `DeployBar.zip` and `DeployBar.zip.sha256` in the matching GitHub
+   release, then verify README/website downloads and the in-app update check.
+6. Copy the generated cask into `Casks/deploybar.rb` in the Homebrew tap,
+   verify the checksum, and test installation. Homebrew uses the same artifact
+   and signing status; it must not disable Gatekeeper or strip quarantine.
 
-No signed release or Homebrew tap is implied by the presence of packaging scripts.
+## Website deployment
+
+The Vercel `deploybar` project in `arthurbnhm-gtm` connects to
+`arthurbnhm/deploybar`. Set `website` as its root directory and enable source
+files outside the root so `design/brand-tokens.json` is available.
+Deploy from Git, verify the demo and installation links, then attach
+`deploybar.com` to production. `www.deploybar.com` redirects to the apex.
+Verify HTTPS, the release download, `/robots.txt`, `/sitemap.xml`, and the
+security-reporting link after deployment.
 
 ## Licensing and bundled material
 

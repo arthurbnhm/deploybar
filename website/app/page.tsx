@@ -2,7 +2,7 @@ import { HeroDemoButton } from "@/components/HeroDemoButton";
 import { LogoIcon } from "@/components/Logo";
 import { MenuBarDemo } from "@/components/MenuBarDemo";
 import { AuroraBackdrop, EmberOrb } from "@/components/Shaders";
-import { FEATURES, GITHUB_REPO_URL, MAC_DOWNLOAD_URL } from "@/lib/data";
+import { FEATURES, GITHUB_REPO_URL, MAC_DOWNLOAD_URL, RELEASE_URL } from "@/lib/data";
 
 function AppleIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
@@ -22,17 +22,20 @@ function GitHubIcon({ className = "w-4 h-4" }: { className?: string }) {
 
 function DownloadButton({ prominent = false }: { prominent?: boolean }) {
   return (
-    <a
-      href={MAC_DOWNLOAD_URL}
-      target="_blank"
-      rel="noreferrer"
-      className={`inline-flex items-center gap-2.5 rounded-full bg-ink font-semibold text-night transition-colors hover:bg-white ${
-        prominent ? "px-8 py-4 text-[15px]" : "px-6 py-3 text-sm"
-      }`}
-    >
-      <AppleIcon />
-      Download for Mac
-    </a>
+    <div className="inline-flex flex-col items-center gap-3">
+      <a
+        href={MAC_DOWNLOAD_URL}
+        className={`inline-flex items-center gap-2.5 rounded-full bg-ink font-semibold text-night transition-colors hover:bg-white ${
+          prominent ? "px-8 py-4 text-[15px]" : "px-6 py-3 text-sm"
+        }`}
+      >
+        <AppleIcon />
+        Download for Mac
+      </a>
+      <a href="#install" className="text-xs text-white/55 underline-offset-4 hover:text-white hover:underline">
+        Unsigned preview · First-launch instructions
+      </a>
+    </div>
   );
 }
 
@@ -60,12 +63,10 @@ export default function HomePage() {
                 <span className="hidden sm:inline">GitHub</span>
               </a>
               <a
-                href={MAC_DOWNLOAD_URL}
-                target="_blank"
-                rel="noreferrer"
+                href="#install"
                 className="inline-flex items-center rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-white/85 transition-colors hover:border-white/35 hover:text-white"
               >
-                Download
+                Install
               </a>
               <MenuBarDemo />
             </nav>
@@ -109,7 +110,7 @@ export default function HomePage() {
           </p>
 
           <div
-            className="animate-rise mt-10 flex flex-wrap items-center justify-center gap-3"
+            className="animate-rise mt-10 flex flex-wrap items-start justify-center gap-4"
             style={{ animationDelay: "0.4s" }}
           >
             <DownloadButton />
@@ -120,7 +121,7 @@ export default function HomePage() {
             className="animate-rise mt-6 font-mono text-[11px] uppercase tracking-[0.28em] text-white/30"
             style={{ animationDelay: "0.5s" }}
           >
-            Free · Open source · macOS 26+
+            Free · MIT licensed · macOS 26+ · Apple Silicon
           </p>
         </div>
       </section>
@@ -154,6 +155,37 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section id="install" className="mx-auto max-w-6xl scroll-mt-10 px-6 py-20">
+        <div className="grid gap-10 border-y border-white/10 py-12 md:grid-cols-2 md:gap-16">
+          <div>
+            <p className="font-mono text-xs uppercase tracking-[0.22em] text-ember">Install DeployBar</p>
+            <h2 className="mt-5 text-4xl tracking-tight">A small app.<br />One extra first step.</h2>
+            <p className="mt-5 max-w-md text-[15px] leading-relaxed text-white/60">
+              This preview is distributed directly and is not signed with an Apple Developer ID
+              or notarized by Apple. macOS will ask you to approve it before its first launch.
+            </p>
+            <p className="mt-4 text-sm text-white/50">Requires macOS 26 or later and an Apple Silicon Mac.</p>
+          </div>
+          <div>
+            <ol className="list-decimal space-y-4 pl-5 text-[15px] leading-relaxed text-white/75">
+              <li>Download the zip, unzip it, and move DeployBar to Applications.</li>
+              <li>Open DeployBar once. If macOS blocks it, dismiss the alert.</li>
+              <li>In System Settings → Privacy &amp; Security, choose Open Anyway for DeployBar, then confirm Open.</li>
+              <li>Connect your Vercel token and choose the projects you want to watch.</li>
+            </ol>
+            <p className="mt-5 text-sm leading-relaxed text-white/50">
+              Only approve a copy you downloaded from this site or our GitHub releases.
+              Your Mac’s other security protections stay enabled.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3 text-sm">
+              <a href={RELEASE_URL} className="text-ember underline-offset-4 hover:underline">Release notes &amp; checksum</a>
+              <a href={`${GITHUB_REPO_URL}#build`} className="text-white/70 underline-offset-4 hover:underline">Build from source</a>
+              <a href="https://support.apple.com/en-us/102445" className="text-white/70 underline-offset-4 hover:underline">Apple’s first-launch guide</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ——— Closing CTA ——— */}
       <section className="relative py-40 md:py-56">
         <EmberOrb />
@@ -179,7 +211,7 @@ export default function HomePage() {
               DeployBar · 2026
             </span>
           </div>
-          <div className="flex items-center gap-8 font-mono text-[11px] uppercase tracking-[0.22em]">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-4 font-mono text-[11px] uppercase tracking-[0.22em]">
             <a
               href={GITHUB_REPO_URL}
               target="_blank"
@@ -189,12 +221,18 @@ export default function HomePage() {
               GitHub
             </a>
             <a
-              href={MAC_DOWNLOAD_URL}
+              href={RELEASE_URL}
               target="_blank"
               rel="noreferrer"
               className="text-white/40 transition-colors hover:text-white"
             >
               Latest release
+            </a>
+            <a
+              href={`${GITHUB_REPO_URL}/security/policy`}
+              className="text-white/40 transition-colors hover:text-white"
+            >
+              Security
             </a>
             <a
               href={`${GITHUB_REPO_URL}/issues`}

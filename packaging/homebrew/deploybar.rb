@@ -9,13 +9,13 @@
 # FrozenStringLiteralComment for files that live under a `Casks/` directory.
 cask "deploybar" do
   version "0.1.0"
-  sha256 "e963cb39c5985236dfb239720689b96fdb1514e12d8e9aa310b1afd8e4d150a6"
+  sha256 "f3bd74561da423322b55803572dee3195f54bcb108729ae91a30ba62d3a22f5f"
 
-  url "https://github.com/arthurbnhm/DeployBar/releases/download/v#{version}/DeployBar.zip",
-      verified: "github.com/arthurbnhm/DeployBar/"
+  url "https://github.com/arthurbnhm/deploybar/releases/download/v#{version}/DeployBar.zip",
+      verified: "github.com/arthurbnhm/deploybar/"
   name "DeployBar"
   desc "Menu bar app for monitoring Vercel production deployments"
-  homepage "https://github.com/arthurbnhm/DeployBar"
+  homepage "https://deploybar.com"
 
   livecheck do
     url :url
@@ -23,8 +23,14 @@ cask "deploybar" do
   end
 
   depends_on macos: :tahoe
+  depends_on arch: :arm64
 
   app "DeployBar.app"
+
+  caveats <<~EOS
+    For release signing status and first-launch instructions, see:
+      https://deploybar.com/#install
+  EOS
 
   zap trash: [
     "~/Library/Application Support/DeployBar",

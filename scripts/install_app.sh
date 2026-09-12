@@ -144,6 +144,7 @@ PLIST
 
 cp "$BINARY_PATH" "$APP_DIR/Contents/MacOS/$APP_NAME"
 chmod +x "$APP_DIR/Contents/MacOS/$APP_NAME"
+cp "$ROOT/LICENSE" "$APP_DIR/Contents/Resources/LICENSE"
 
 if [[ "$SIGN_IDENTITY" == "-" ]]; then
   echo "Signing with ad-hoc identity."

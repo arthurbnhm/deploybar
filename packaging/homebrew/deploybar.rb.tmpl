@@ -11,11 +11,11 @@ cask "deploybar" do
   version "__VERSION__"
   sha256 "__SHA256__"
 
-  url "https://github.com/arthurbnhm/DeployBar/releases/download/v#{version}/DeployBar.zip",
-      verified: "github.com/arthurbnhm/DeployBar/"
+  url "https://github.com/arthurbnhm/deploybar/releases/download/v#{version}/DeployBar.zip",
+      verified: "github.com/arthurbnhm/deploybar/"
   name "DeployBar"
   desc "Menu bar app for monitoring Vercel production deployments"
-  homepage "https://github.com/arthurbnhm/DeployBar"
+  homepage "https://deploybar.com"
 
   livecheck do
     url :url
@@ -23,8 +23,14 @@ cask "deploybar" do
   end
 
   depends_on macos: :tahoe
+  depends_on arch: :arm64
 
   app "DeployBar.app"
+
+  caveats <<~EOS
+    For release signing status and first-launch instructions, see:
+      https://deploybar.com/#install
+  EOS
 
   zap trash: [
     "~/Library/Application Support/DeployBar",

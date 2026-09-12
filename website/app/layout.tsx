@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Instrument_Serif, Schibsted_Grotesk } from "next/font/google";
+import { SITE_URL } from "@/lib/data";
 import "./globals.css";
 
 const sans = Schibsted_Grotesk({
@@ -23,10 +24,19 @@ const mono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "DeployBar — Vercel deploys, in your menu bar",
   description:
     "A native macOS menu bar app that watches your Vercel production deployments in real-time. Free and open source.",
   icons: { icon: "/favicon.svg" },
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "DeployBar — Vercel deploys, in your menu bar",
+    description: "A free, open-source macOS menu bar app for monitoring Vercel deployments.",
+    url: SITE_URL,
+    siteName: "DeployBar",
+    type: "website",
+  },
 };
 
 export const viewport: Viewport = {

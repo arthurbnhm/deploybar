@@ -13,6 +13,22 @@ SKIP_NOTARIZATION="${SKIP_NOTARIZATION:-0}"
 APP_VERSION="${APP_VERSION:-$(cat "$ROOT/VERSION" 2>/dev/null || echo 0.1.0)}"
 CASK_TEMPLATE="$ROOT/packaging/homebrew/deploybar.rb.tmpl"
 CASK_OUTPUT="$ROOT/packaging/homebrew/deploybar.rb"
+UNSIGNED_RELEASE=0
+
+if [[ "$#" -gt 1 ]]; then
+  echo "Usage: $0 [--unsigned]" >&2
+  exit 1
+fi
+
+case "${1:-}" in
+  --unsigned) UNSIGNED_RELEASE=1 ;;
+  "") ;;
+  *) echo "Usage: $0 [--unsigned]" >&2; exit 1 ;;
+esac
+
+write_checksum() {
+  printf '%s  %s\n' "$ZIP_SHA256" "$APP_NAME.zip" > "$ZIP_PATH.sha256"
+}
 
 select_developer_id_identity() {
   security find-identity -v -p codesigning 2>/dev/null \
@@ -36,17 +52,41 @@ render_cask() {
   echo "Rendered Homebrew cask: $CASK_OUTPUT (version $version, sha256 $sha256)"
 }
 
+if [[ "$UNSIGNED_RELEASE" == "1" ]]; then
+  ALLOW_ADHOC_SIGNING=1 \
+  CODESIGN_IDENTITY=- \
+  SKIP_INSTALL=1 \
+  APP_VERSION="$APP_VERSION" \
+  "$ROOT/scripts/install_app.sh"
+
+  codesign --verify --deep --strict "$APP_DIR"
+  rm -f "$ZIP_PATH"
+  ditto -c -k --keepParent "$APP_DIR" "$ZIP_PATH"
+  ZIP_SHA256="$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')"
+  write_checksum
+  render_cask "$APP_VERSION" "$ZIP_SHA256"
+  echo "Created unsigned preview: $ZIP_PATH"
+  echo "This uses an ad-hoc signature, not Developer ID. It is not notarized."
+  echo "Label the download as unsigned and link to https://deploybar.com/#install."
+  echo "SHA256: $ZIP_SHA256"
+  exit 0
+fi
+
 if [[ -z "$SIGN_IDENTITY" ]]; then
   SIGN_IDENTITY="$(select_developer_id_identity)"
 fi
 
 if [[ -z "$SIGN_IDENTITY" || "$SIGN_IDENTITY" != Developer\ ID\ Application:* ]]; then
   cat >&2 <<EOF
-Public release builds must be signed with a Developer ID Application identity.
+The default release path requires a Developer ID Application identity.
 
 Install a Developer ID Application certificate or pass one explicitly:
 
   CODESIGN_IDENTITY="Developer ID Application: Name (TEAMID)" ./scripts/package_release.sh
+
+For an explicitly labeled unsigned preview:
+
+  ./scripts/package_release.sh --unsigned
 EOF
   exit 1
 fi
@@ -103,6 +143,7 @@ ZIP_SHA256="$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')"
 
 spctl --assess --type execute --verbose "$APP_DIR"
 
+write_checksum
 render_cask "$APP_VERSION" "$ZIP_SHA256"
 echo "Created Developer ID signed, notarized release artifact: $ZIP_PATH"
 echo "SHA256: $ZIP_SHA256"
