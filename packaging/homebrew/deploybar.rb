@@ -11,8 +11,7 @@ cask "deploybar" do
   version "0.1.0"
   sha256 "f3bd74561da423322b55803572dee3195f54bcb108729ae91a30ba62d3a22f5f"
 
-  url "https://github.com/arthurbnhm/deploybar/releases/download/v#{version}/DeployBar.zip",
-      verified: "github.com/arthurbnhm/deploybar/"
+  url "https://github.com/arthurbnhm/deploybar/releases/download/v#{version}/DeployBar.zip"
   name "DeployBar"
   desc "Menu bar app for monitoring Vercel production deployments"
   homepage "https://deploybar.com"
