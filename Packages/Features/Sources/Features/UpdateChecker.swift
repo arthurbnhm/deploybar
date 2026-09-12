@@ -9,9 +9,8 @@ public enum UpdateAvailability: Equatable {
 
 /// Minimal update checker: polls the GitHub Releases API and compares versions.
 ///
-/// This is a prototype for Plan 009 (spike). It does not download or install anything —
-/// it only tells the user a newer release exists and hands them a link to it. See
-/// `plans-findings-009.md` for the Sparkle-vs-minimal-checker decision this stands in for.
+/// Runs only when requested in Settings. It does not download or install anything;
+/// it reports a newer release and provides a link to its GitHub release page.
 public enum UpdateChecker {
     /// GitHub REST API endpoint for the latest non-draft, non-prerelease release.
     public static let latestReleaseAPIURL = URL(
@@ -78,9 +77,7 @@ public enum UpdateChecker {
     }
 
     /// Fetches the latest GitHub release and compares its tag against `currentVersion`.
-    /// `session` is injectable for future test coverage; today's tests exercise only the
-    /// pure `isNewer`/`parseVersion` logic above and never call this function, per the
-    /// spike's "no real network calls in tests" requirement.
+    /// `session` is injectable so callers can validate responses without real network calls.
     public static func checkForUpdate(
         currentVersion: String,
         session: URLSession = .shared

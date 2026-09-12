@@ -1,12 +1,15 @@
+import brandTokens from "../../design/brand-tokens.json";
+
 export type DeploymentStatus = "ready" | "building" | "failed" | "queued" | "canceled";
 
-// Mirrors the macOS system palette the app uses (.green/.orange/.red/.indigo/.gray).
+// Sourced from design/brand-tokens.json — the single source of truth shared
+// with the Swift app (see DeployBarTests/BrandTokensTests.swift).
 export const STATUS_COLORS: Record<DeploymentStatus, string> = {
-  ready: "#30D158",
-  building: "#FF9F0A",
-  failed: "#FF453A",
-  queued: "#5E5CE6",
-  canceled: "#98989D",
+  ready: brandTokens.statusColors.ready.hex,
+  building: brandTokens.statusColors.building.hex,
+  failed: brandTokens.statusColors.failed.hex,
+  queued: brandTokens.statusColors.queued.hex,
+  canceled: brandTokens.statusColors.canceled.hex,
 };
 
 export const STATUS_LABELS: Record<DeploymentStatus, string> = {
@@ -55,7 +58,7 @@ export const FEATURES: Feature[] = [
   },
   {
     title: "Privacy-first",
-    description: "Connects directly to Vercel's API. No analytics, no tracking, no third-party servers.",
+    description: "Connects directly to Vercel's API. Optional update checks use GitHub. No analytics or tracking.",
   },
   {
     title: "Three polling modes",

@@ -22,17 +22,13 @@ DeployBar is a native macOS menu bar app for monitoring Vercel production deploy
 
 ## Download
 
-For end users, download the latest app build from GitHub Releases:
+A public app release has not been published yet. You can build from source using
+the instructions below. When a verified release is available, it will appear on
+[GitHub Releases](https://github.com/arthurbnhm/DeployBar/releases/latest).
 
-- https://github.com/arthurbnhm/DeployBar/releases/latest
-
-After downloading:
-
-1. Move `DeployBar.app` to `/Applications` (or `~/Applications`).
-2. Open DeployBar and approve the first token save if macOS asks.
-
-Release builds should be Developer ID signed and notarized. Do not publish
-ad-hoc or local-development signed app bundles as GitHub Releases.
+Public release artifacts must be Developer ID signed and notarized. Local or
+ad-hoc signed bundles are for development only. See the
+[publication checklist](docs/PUBLISHING.md) for the remaining release gates.
 
 ## Build
 
@@ -104,7 +100,7 @@ A marketing site lives in `website/` (Next.js 16 + React 19).
 
 ```bash
 cd website
-npm install
+npm ci
 npm run dev
 ```
 
@@ -129,7 +125,14 @@ npm run typecheck
 
 ## Privacy
 
-DeployBar sends API requests only to Vercel and stores data locally. No analytics or telemetry are included in V1.
+DeployBar contacts Vercel directly to monitor deployments and perform requested
+build cancellations. Checking for updates manually contacts GitHub Releases
+without sending the Vercel token. The app has no analytics or telemetry.
+
+Settings, deployment metadata, and build logs are stored locally. Build logs may
+contain sensitive output from your builds. Disconnect clears local account data
+and rejects late responses from the old session; it does not revoke the token at
+Vercel or erase backups. See [SECURITY.md](SECURITY.md) for details.
 
 ## Keychain Prompts
 
@@ -151,3 +154,12 @@ If macOS keeps asking for Keychain access:
 Apple explains that if an already trusted app changes, Keychain may ask you to
 authorize it again. Stable code signing gives Keychain a durable app identity
 across rebuilds.
+
+## License and security reports
+
+DeployBar is licensed under the [MIT License](LICENSE). Third-party dependencies
+retain their own licenses. This is an independent project, not affiliated with
+or endorsed by Vercel or Apple.
+
+Use the confidential reporting channel described in [SECURITY.md](SECURITY.md).
+Do not include credentials or private build logs in public issues.

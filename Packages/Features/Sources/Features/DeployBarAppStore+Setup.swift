@@ -4,9 +4,10 @@ import Foundation
 @MainActor
 extension DeployBarAppStore {
     public func refreshProjectsForScopeTapped(persistSelectionChanges: Bool = false) {
+        let session = sessionGeneration
         Task {
-            await refreshProjectsForScope()
-            if persistSelectionChanges {
+            let refreshed = await refreshProjectsForScope()
+            if refreshed, isCurrentSession(session), persistSelectionChanges {
                 updateWatchedProjects()
             }
         }
@@ -14,6 +15,7 @@ extension DeployBarAppStore {
 
     @discardableResult
     public func updateToken(_ rawToken: String) async -> Bool {
+        guard !isDisconnecting, !isValidatingToken else { return false }
         let previousTokenNotice = tokenNotice
         tokenError = nil
         tokenNotice = nil
@@ -35,18 +37,27 @@ extension DeployBarAppStore {
         let previousMonitorError = monitorError
         let previousAuthConnectionState = authConnectionState
 
-        monitorTask?.cancel()
-        monitorTask = nil
+        let session = invalidateSession()
 
         isValidatingToken = true
-        defer { isValidatingToken = false }
+        defer { if session == sessionGeneration { isValidatingToken = false } }
 
         do {
             try env.tokenStore.saveToken(trimmed)
             let user = try await env.vercelClient.validateToken()
+            guard isCurrentSession(session) else { return false }
+            await env.monitoringEngine.resetState()
+            guard isCurrentSession(session) else { return false }
             authUser = user
             authConnectionState = .connected
             try await loadTeamsAndProjects(preferredSelectedIDs: previousSelectedProjectIDs)
+            guard isCurrentSession(session) else { return false }
+            if previousAuthUser?.id != user.id {
+                await drainLogWrites()
+                guard isCurrentSession(session) else { return false }
+                try await env.eventStore.clear()
+                guard isCurrentSession(session) else { return false }
+            }
             tokenError = nil
 
             let prunedCount = previousSelectedProjectIDs.subtracting(selectedProjectIDs).count
@@ -62,6 +73,7 @@ extension DeployBarAppStore {
             activateMonitoringIfReady()
             return true
         } catch {
+            guard isCurrentSession(session) else { return false }
             if !previousToken.isEmpty {
                 try? env.tokenStore.saveToken(previousToken)
             } else {
@@ -87,14 +99,19 @@ extension DeployBarAppStore {
         }
     }
 
-    public func refreshProjectsForScope() async {
+    @discardableResult
+    public func refreshProjectsForScope() async -> Bool {
+        guard !isDisconnecting, !isValidatingToken else { return false }
+        let session = sessionGeneration
+        let scope = selectedScope
         guard authUser != nil else {
             tokenError = "Connect your Vercel token first."
-            return
+            return false
         }
 
         do {
-            let projects = try await env.vercelClient.listProjects(teamId: selectedScope.teamId, limit: 100, until: nil)
+            let projects = try await env.vercelClient.listProjects(teamId: scope.teamId, limit: 100, until: nil)
+            guard isCurrentSession(session), selectedScope == scope else { return false }
             availableProjects = ProjectSelectionService.sortedProjects(projects)
             selectedProjectIDs = ProjectSelectionService.visibleSelectedIDs(
                 selectedIDs: selectedProjectIDs,
@@ -102,9 +119,12 @@ extension DeployBarAppStore {
             )
             tokenError = nil
             tokenNotice = nil
+            return true
         } catch {
+            guard isCurrentSession(session), selectedScope == scope else { return false }
             tokenError = "Unable to load projects for this scope. Try Personal scope or a token with team access."
             tokenNotice = nil
+            return false
         }
     }
 
@@ -125,6 +145,7 @@ extension DeployBarAppStore {
     }
 
     public func updateWatchedProjects() {
+        guard !isDisconnecting, !isValidatingToken else { return }
         settings.watchedProjects = ProjectSelectionService.watchedProjects(
             availableProjects: availableProjects,
             selectedIDs: selectedProjectIDs,
@@ -141,7 +162,9 @@ extension DeployBarAppStore {
     }
 
     func loadTeamsAndProjects(preferredSelectedIDs: Set<String>? = nil) async throws {
+        let session = sessionGeneration
         let fetchedTeams = try await env.vercelClient.listTeams(limit: 100, until: nil)
+        guard isCurrentSession(session) else { throw CancellationError() }
         teams = fetchedTeams.sorted { lhs, rhs in
             lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
         }
@@ -156,6 +179,7 @@ extension DeployBarAppStore {
         do {
             projects = try await env.vercelClient.listProjects(teamId: selectedScope.teamId, limit: 100, until: nil)
         } catch {
+            guard isCurrentSession(session) else { throw CancellationError() }
             if case .team = selectedScope {
                 selectedScope = .personal
                 projects = try await env.vercelClient.listProjects(teamId: nil, limit: 100, until: nil)
@@ -164,6 +188,7 @@ extension DeployBarAppStore {
             }
         }
 
+        guard isCurrentSession(session) else { throw CancellationError() }
         availableProjects = ProjectSelectionService.sortedProjects(projects)
         let candidateSelectedIDs = preferredSelectedIDs ?? Set(settings.watchedProjects.map(\.id))
         let normalizedSelectedIDs = ProjectSelectionService.visibleSelectedIDs(

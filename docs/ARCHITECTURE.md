@@ -12,7 +12,7 @@ DeployBar uses a modular architecture:
 
 ## Runtime Flow
 
-1. App starts and loads local settings.
+1. App creates its live environment and loads local settings. If environment creation fails, it displays an explicit startup error with Retry and Quit; production never falls back to mock data.
 2. If token exists, DeployBar validates with `GET /v2/user`.
 3. User selects scope and projects (max 20). Teams and projects are loaded across all Vercel pagination pages.
 4. Monitoring loop refreshes production deployment status.
@@ -26,7 +26,7 @@ DeployBar uses a modular architecture:
 - `DeployBarAppStore+Setup.swift`: token connect, scope/project loading, onboarding completion.
 - `DeployBarAppStore+Monitoring.swift`: polling loop, cadence selection, transition handling.
 - `DeployBarAppStore+LogsAndAccount.swift`: logs sheet data flow and account/data reset actions.
-- `AuthBootstrapService.swift`, `ProjectSelectionService.swift`, `TransitionNotificationService.swift`: pure domain helpers extracted from the store.
+- `ProjectSelectionService.swift`, `TransitionNotificationService.swift`: pure domain helpers extracted from the store.
 - UI shared components are split by concern:
   - `DesignSystem.swift` (layout metrics + status color/symbol metadata; fills and typography come from system semantic styles)
   - `StatusComponents.swift`
@@ -62,3 +62,19 @@ Polling intervals are derived from selected profile and runtime conditions:
 - Token is never written to logs.
 - No third-party analytics SDKs.
 - Disconnect clears the Keychain token, settings, cached statuses, and local deployment logs.
+
+## Session boundaries
+
+Account operations capture a session generation. Disconnect, token replacement,
+and hard authentication failures invalidate that generation and stop monitoring
+and log work. Responses from an older session cannot restore authentication,
+settings, statuses, or logs. Log windows also have a generation so switching or
+closing a window invalidates its outstanding requests.
+
+Disconnect waits for log writes already admitted before clearing the event store.
+MonitoringEngine rejects a refresh that completes after its state was reset.
+Startup initialization and retry are owned by `DeployBarStartup`; preview data
+is used explicitly by development previews and tests only.
+
+Manual update checks contact GitHub Releases without the Vercel token. See
+`SECURITY.md` for local data handling and `PUBLISHING.md` for publication gates.

@@ -14,6 +14,8 @@ extension DeployBarAppStore {
     static let transientAuthFailureThreshold = 3
 
     func bootstrap() async {
+        let session = sessionGeneration
+        guard isCurrentSession(session) else { return }
 #if !arch(arm64)
         phase = .unsupported("DeployBar V1 supports Apple Silicon only.")
         authConnectionState = .setupRequired(reason: "DeployBar V1 supports Apple Silicon only.")
@@ -39,7 +41,8 @@ extension DeployBarAppStore {
         }
         selectedScope = settings.selectedScope
 
-        let authResolution = await resolveStartupAuth()
+        let authResolution = await resolveStartupAuth(session: session)
+        guard isCurrentSession(session) else { return }
         switch authResolution {
         case let .connected(user):
             consecutiveTransientAuthFailures = 0
@@ -51,6 +54,7 @@ extension DeployBarAppStore {
             do {
                 try await loadTeamsAndProjects()
             } catch {
+                guard isCurrentSession(session) else { return }
                 if let reconnectMessage = reconnectMessageForHardAuthFailure(error) {
                     await handleHardAuthFailure(
                         message: reconnectMessage,
@@ -62,6 +66,7 @@ extension DeployBarAppStore {
                 monitorError = "Unable to load teams and projects. DeployBar will retry in the background."
             }
 
+            guard isCurrentSession(session) else { return }
             activateMonitoringIfReady()
         case let .setupRequired(message, shouldClearStoredToken):
             await handleHardAuthFailure(message: message, clearStoredToken: shouldClearStoredToken)
@@ -213,6 +218,7 @@ extension DeployBarAppStore {
     }
 
     func persistSettings() {
+        guard !isDisconnecting else { return }
         do {
             try env.settingsStore.save(settings)
         } catch {
@@ -244,8 +250,9 @@ extension DeployBarAppStore {
         return description
     }
 
-    private func resolveStartupAuth() async -> StartupAuthResolution {
+    private func resolveStartupAuth(session: Int) async -> StartupAuthResolution {
         for attempt in 0 ... Self.startupAuthRetryDelays.count {
+            guard isCurrentSession(session) else { return .setupRequired(message: Self.defaultTokenPrompt, clearStoredToken: false) }
             do {
                 let storedToken = try env.tokenStore.readToken()?
                     .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -257,6 +264,7 @@ extension DeployBarAppStore {
                 let user = try await env.vercelClient.validateToken()
                 return .connected(user)
             } catch {
+                guard isCurrentSession(session) else { return .setupRequired(message: Self.defaultTokenPrompt, clearStoredToken: false) }
                 if let reconnectMessage = reconnectMessageForHardAuthFailure(error) {
                     return .setupRequired(
                         message: reconnectMessage,
@@ -411,11 +419,15 @@ extension DeployBarAppStore {
     }
 
     func handleHardAuthFailure(message: String, clearStoredToken: Bool) async {
+        let session = invalidateSession()
+        authUser = nil
+        enterSetupRequiredState(authReason: message)
         if clearStoredToken {
             try? env.tokenStore.clearToken()
         }
 
         await env.monitoringEngine.resetState()
+        guard session == sessionGeneration, !isDisconnecting else { return }
         authUser = nil
         tokenNotice = nil
         tokenError = message

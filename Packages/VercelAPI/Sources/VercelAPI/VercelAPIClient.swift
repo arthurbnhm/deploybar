@@ -2,18 +2,26 @@ import Core
 import Foundation
 
 public final class VercelAPIClient: VercelClient {
-    private static let appVersion = "0.1.0"
+    /// The running app's marketing version, for the User-Agent header. Reads
+    /// `CFBundleShortVersionString`, which the packaging scripts stamp from the
+    /// repo's `VERSION` file — the single source of truth for versioning.
+    public static var bundleAppVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+    }
 
     private let baseURL = URL(string: "https://api.vercel.com")!
     private let decoder: JSONDecoder
     private let session: URLSession
     private let tokenProvider: @Sendable () throws -> String?
+    private let appVersion: String
 
     public init(
         session: URLSession = .shared,
+        appVersion: String = VercelAPIClient.bundleAppVersion,
         tokenProvider: @escaping @Sendable () throws -> String?
     ) {
         self.session = session
+        self.appVersion = appVersion
         self.tokenProvider = tokenProvider
         self.decoder = JSONDecoder()
     }
@@ -194,7 +202,7 @@ public final class VercelAPIClient: VercelClient {
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("DeployBar/\(Self.appVersion)", forHTTPHeaderField: "User-Agent")
+        request.setValue("DeployBar/\(appVersion)", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 20
         return request
     }

@@ -38,6 +38,7 @@ public struct MonitoringUpdate: Sendable {
 public actor MonitoringEngine {
     private let client: VercelClient
 
+    private var generation = 0
     private var lastSnapshots: [String: DeploymentSnapshot] = [:]
     private var notifiedTerminalKeys: Set<String> = []
     private var lastMeaningfulChangeAt: Date = Date()
@@ -56,6 +57,7 @@ public actor MonitoringEngine {
         profile: PollingProfile,
         menuIsOpen: Bool
     ) async throws -> MonitoringUpdate {
+        let refreshGeneration = generation
         let now = Date()
 
         guard !projects.isEmpty else {
@@ -108,6 +110,8 @@ public actor MonitoringEngine {
                 addNext()
             }
         }
+
+        guard generation == refreshGeneration, !Task.isCancelled else { throw CancellationError() }
 
         // Fold phase: serial, in original project order — deterministic transition/statuses ordering.
         for (index, project) in projects.enumerated() {
@@ -162,6 +166,7 @@ public actor MonitoringEngine {
     }
 
     public func resetState() {
+        generation += 1
         lastSnapshots.removeAll()
         notifiedTerminalKeys.removeAll()
         lastMeaningfulChangeAt = Date()

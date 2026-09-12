@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const isDevelopment = process.env.NODE_ENV === "development";
@@ -30,6 +31,11 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["172.20.10.11"],
   poweredByHeader: false,
   reactCompiler: true,
+  // The repo root, so imports can reach ../design/brand-tokens.json —
+  // the shared source of truth for status colors (see design/brand-tokens.json).
+  turbopack: {
+    root: path.join(__dirname, ".."),
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

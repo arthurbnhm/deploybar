@@ -39,8 +39,8 @@ struct ProjectsSelectionSection: View {
                 .pickerStyle(.menu)
                 .onChange(of: store.selectedScope) { _, _ in
                     Task {
-                        await store.refreshProjectsForScope()
-                        if persistSelectionChanges {
+                        let refreshed = await store.refreshProjectsForScope()
+                        if refreshed, persistSelectionChanges {
                             store.updateWatchedProjects()
                         }
                     }

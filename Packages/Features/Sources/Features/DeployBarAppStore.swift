@@ -62,6 +62,10 @@ public final class DeployBarAppStore {
     var logsTailTask: Task<Void, Never>?
     var logsTailInterval: TimeInterval = 2.0
     var logsTailGeneration = 0
+    var sessionGeneration = 0
+    var bootstrapTask: Task<Void, Never>?
+    var logWrites: [UUID: Task<Void, Error>] = [:]
+    public internal(set) var isDisconnecting = false
     var hasStarted = false
     var consecutiveTransientAuthFailures = 0
     var lastEventPurgeAt: Date?
@@ -75,7 +79,23 @@ public final class DeployBarAppStore {
             return
         }
         hasStarted = true
-        Task { await bootstrap() }
+        bootstrapTask = Task { await bootstrap() }
+    }
+
+    func isCurrentSession(_ generation: Int) -> Bool {
+        generation == sessionGeneration && !isDisconnecting && !Task.isCancelled
+    }
+
+    @discardableResult
+    func invalidateSession() -> Int {
+        sessionGeneration += 1
+        bootstrapTask?.cancel()
+        bootstrapTask = nil
+        monitorTask?.cancel()
+        monitorTask = nil
+        closeLogs()
+        cancelingDeploymentID = nil
+        return sessionGeneration
     }
 
     public var hasValidAuth: Bool {

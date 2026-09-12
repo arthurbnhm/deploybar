@@ -32,6 +32,7 @@ public struct DeployBarSettingsView: View {
             }
         }
         .frame(width: 560, height: 520)
+        .disabled(store.isDisconnecting)
     }
 }
 

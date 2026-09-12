@@ -4,19 +4,22 @@ import Foundation
 @MainActor
 extension DeployBarAppStore {
     public func openLogs(for status: ProjectStatus) async {
+        guard !isDisconnecting, !isValidatingToken else { return }
         guard let snapshot = status.snapshot else {
             monitorError = "No deployment available yet for this project."
             return
         }
 
         stopLogsTail()
+        let generation = logsTailGeneration
+        let session = sessionGeneration
 
         selectedLogsProject = status.project
         selectedLogsDeployment = snapshot
         isLoadingLogs = true
 
         defer {
-            isLoadingLogs = false
+            if generation == logsTailGeneration { isLoadingLogs = false }
         }
 
         var initialSinceMs: Int?
@@ -28,21 +31,29 @@ extension DeployBarAppStore {
                 since: nil
             )
 
+            guard logsAreCurrent(generation, session: session) else { return }
             if !freshEvents.isEmpty {
-                try await env.eventStore.persist(events: freshEvents)
+                try await persistLogEvents(freshEvents)
                 initialSinceMs = freshEvents.map { epochMs($0.createdAt) }.max()
             }
 
-            logEvents = try await env.eventStore.load(deploymentId: snapshot.id, limit: 300)
+            let loaded = try await env.eventStore.load(deploymentId: snapshot.id, limit: 300)
+            guard logsAreCurrent(generation, session: session) else { return }
+            logEvents = loaded
         } catch {
+            guard logsAreCurrent(generation, session: session) else { return }
             monitorError = error.localizedDescription
             if let cached = try? await env.eventStore.load(deploymentId: snapshot.id, limit: 300) {
+                guard logsAreCurrent(generation, session: session) else { return }
                 logEvents = cached
             } else {
+                guard logsAreCurrent(generation, session: session) else { return }
                 logEvents = []
             }
         }
 
+        guard logsAreCurrent(generation, session: session) else { return }
+        isLoadingLogs = false
         if snapshot.stage.isInFlight {
             startLogsTail(deploymentId: snapshot.id, projectId: status.project.id, sinceMs: initialSinceMs)
         }
@@ -59,8 +70,9 @@ extension DeployBarAppStore {
             return false
         }
 
+        let session = sessionGeneration
         await openLogs(for: status)
-        return true
+        return isCurrentSession(session) && selectedLogsProject?.id == id
     }
 
     /// Cancels an in-flight (`queued`/`building`) deployment, then forces a refresh so the
@@ -68,17 +80,21 @@ extension DeployBarAppStore {
     /// user-facing message without clearing the stored token or dropping the auth session —
     /// only `.unauthorized`/`.invalidToken` do that (see `shouldClearStoredToken`).
     public func cancelDeployment(for status: ProjectStatus) async {
+        guard !isDisconnecting, !isValidatingToken else { return }
+        let session = sessionGeneration
         guard let snapshot = status.snapshot, snapshot.stage == .queued || snapshot.stage == .building else {
             return
         }
 
         cancelingDeploymentID = snapshot.id
-        defer { cancelingDeploymentID = nil }
+        defer { if session == sessionGeneration { cancelingDeploymentID = nil } }
 
         do {
             try await env.vercelClient.cancelDeployment(deploymentId: snapshot.id, teamId: status.project.teamId)
+            guard isCurrentSession(session) else { return }
             monitorError = nil
         } catch {
+            guard isCurrentSession(session) else { return }
             monitorError = error.localizedDescription
         }
 
@@ -90,6 +106,7 @@ extension DeployBarAppStore {
         selectedLogsProject = nil
         selectedLogsDeployment = nil
         logEvents = []
+        isLoadingLogs = false
     }
 
     /// Starts a background loop that polls `deploymentEvents(since:)` for the tailed deployment
@@ -107,31 +124,38 @@ extension DeployBarAppStore {
         // been superseded and avoid clobbering `logsTailTask`/`isTailingLogs`.
         logsTailGeneration += 1
         let generation = logsTailGeneration
+        let session = sessionGeneration
 
         logsTailTask = Task { [weak self] in
             await self?.runLogsTailLoop(
                 deploymentId: deploymentId,
                 projectId: projectId,
                 initialSinceMs: sinceMs,
-                generation: generation
+                generation: generation,
+                session: session
             )
         }
     }
 
     func stopLogsTail() {
+        logsTailGeneration += 1
         logsTailTask?.cancel()
         logsTailTask = nil
         isTailingLogs = false
     }
 
-    private func runLogsTailLoop(deploymentId: String, projectId: String, initialSinceMs: Int?, generation: Int) async {
+    private func logsAreCurrent(_ generation: Int, session: Int) -> Bool {
+        generation == logsTailGeneration && isCurrentSession(session)
+    }
+
+    private func runLogsTailLoop(deploymentId: String, projectId: String, initialSinceMs: Int?, generation: Int, session: Int) async {
         var sinceMs = initialSinceMs
         var interval = logsTailInterval
 
-        while !Task.isCancelled {
+        while logsAreCurrent(generation, session: session) {
             await sleep(seconds: interval)
 
-            if Task.isCancelled {
+            if !logsAreCurrent(generation, session: session) {
                 break
             }
 
@@ -142,9 +166,12 @@ extension DeployBarAppStore {
                     since: sinceMs
                 )
 
+                guard logsAreCurrent(generation, session: session) else { break }
                 if !freshEvents.isEmpty {
-                    try await env.eventStore.persist(events: freshEvents)
-                    logEvents = try await env.eventStore.load(deploymentId: deploymentId, limit: 300)
+                    try await persistLogEvents(freshEvents)
+                    let loaded = try await env.eventStore.load(deploymentId: deploymentId, limit: 300)
+                    guard logsAreCurrent(generation, session: session) else { break }
+                    logEvents = loaded
                     if let newestMs = freshEvents.map({ epochMs($0.createdAt) }).max() {
                         sinceMs = max(sinceMs ?? 0, newestMs)
                     }
@@ -161,7 +188,8 @@ extension DeployBarAppStore {
                 let resolvedStage = projectStatuses.first(where: { $0.project.id == projectId })?.snapshot?.stage
 
                 if resolvedStage == nil || resolvedStage!.isTerminal {
-                    await performFinalCatchUpFetch(deploymentId: deploymentId, sinceMs: sinceMs)
+                    await performFinalCatchUpFetch(deploymentId: deploymentId, sinceMs: sinceMs, generation: generation, session: session)
+                    guard logsAreCurrent(generation, session: session) else { break }
 
                     if let resolvedStage, let existing = selectedLogsDeployment, existing.id == deploymentId {
                         selectedLogsDeployment = DeploymentSnapshot(
@@ -178,6 +206,7 @@ extension DeployBarAppStore {
             } catch is CancellationError {
                 break
             } catch let error as DeployBarError {
+                guard logsAreCurrent(generation, session: session) else { break }
                 if case let .rateLimited(resetAt) = error {
                     await sleep(seconds: max(0, resetAt.timeIntervalSinceNow))
                 } else {
@@ -185,6 +214,7 @@ extension DeployBarAppStore {
                     interval = 5.0
                 }
             } catch {
+                guard logsAreCurrent(generation, session: session) else { break }
                 interval = 5.0
             }
         }
@@ -196,7 +226,7 @@ extension DeployBarAppStore {
         }
     }
 
-    private func performFinalCatchUpFetch(deploymentId: String, sinceMs: Int?) async {
+    private func performFinalCatchUpFetch(deploymentId: String, sinceMs: Int?, generation: Int, session: Int) async {
         guard let finalEvents = try? await env.vercelClient.deploymentEvents(
             deploymentId: deploymentId,
             limit: 100,
@@ -205,14 +235,32 @@ extension DeployBarAppStore {
             return
         }
 
-        try? await env.eventStore.persist(events: finalEvents)
+        guard logsAreCurrent(generation, session: session) else { return }
+        try? await persistLogEvents(finalEvents)
         if let reloaded = try? await env.eventStore.load(deploymentId: deploymentId, limit: 300) {
+            guard logsAreCurrent(generation, session: session) else { return }
             logEvents = reloaded
         }
     }
 
     private func epochMs(_ date: Date) -> Int {
         Int(date.timeIntervalSince1970 * 1000)
+    }
+
+    private func persistLogEvents(_ events: [DeploymentEvent]) async throws {
+        let id = UUID()
+        let eventStore = env.eventStore
+        let write = Task { try await eventStore.persist(events: events) }
+        logWrites[id] = write
+        defer { logWrites[id] = nil }
+        try await write.value
+    }
+
+    func drainLogWrites() async {
+        // Invalidation prevents new writes. Finish writes already admitted before clearing,
+        // including stores that suspend internally or reorder actor work.
+        let pending = Array(logWrites.values)
+        for write in pending { _ = await write.result }
     }
 
     private func sleep(seconds: TimeInterval) async {
@@ -223,8 +271,13 @@ extension DeployBarAppStore {
     }
 
     public func disconnectAccount() async {
-        monitorTask?.cancel()
-        monitorTask = nil
+        guard !isDisconnecting else { return }
+        isDisconnecting = true
+        invalidateSession()
+        isValidatingToken = false
+        authUser = nil
+        enterSetupRequiredState(authReason: Self.defaultTokenPrompt)
+        defer { isDisconnecting = false }
 
         var cleanupErrors: [String] = []
         do {
@@ -239,6 +292,7 @@ extension DeployBarAppStore {
             cleanupErrors.append(error.localizedDescription)
         }
 
+        await drainLogWrites()
         do {
             try await env.eventStore.clear()
         } catch {

@@ -1,0 +1,10 @@
+{
+  "comment": "Single source of truth for status colors shared by the Swift app and the website. The app uses the semantic macOS system color (adaptive); the website uses the hex approximation of that color's dark-mode value. DeployBarTests/BrandTokensTests.swift pins the Swift mapping to this file; website/lib/data.ts imports it directly.",
+  "statusColors": {
+    "ready": { "semantic": "green", "hex": "#30D158" },
+    "building": { "semantic": "orange", "hex": "#FF9F0A" },
+    "failed": { "semantic": "red", "hex": "#FF453A" },
+    "queued": { "semantic": "indigo", "hex": "#5E5CE6" },
+    "canceled": { "semantic": "gray", "hex": "#98989D" }
+  }
+}

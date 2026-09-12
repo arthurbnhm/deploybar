@@ -13,6 +13,7 @@ enum TransitionNotificationService {
         }
 
         for transition in transitions {
+            guard !Task.isCancelled else { return }
             let userInfo = [
                 "projectId": transition.project.id,
                 "deploymentId": transition.current.id
@@ -27,7 +28,7 @@ enum TransitionNotificationService {
                         userInfo: userInfo
                     )
                 }
-                if settings.soundsEnabled {
+                if settings.soundsEnabled, !Task.isCancelled {
                     soundPlayer.play(.success, theme: settings.soundTheme)
                 }
 
@@ -39,7 +40,7 @@ enum TransitionNotificationService {
                         userInfo: userInfo
                     )
                 }
-                if settings.soundsEnabled {
+                if settings.soundsEnabled, !Task.isCancelled {
                     soundPlayer.play(.failure, theme: settings.soundTheme)
                 }
 

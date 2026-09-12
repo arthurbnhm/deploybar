@@ -65,34 +65,41 @@ final class DeployBarAppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct DeployBarMainApp: App {
     @NSApplicationDelegateAdaptor(DeployBarAppDelegate.self) private var appDelegate
-    @State private var store: DeployBarAppStore
-
-    init() {
-        let appStore: DeployBarAppStore
-        if let live = try? DeployBarEnvironment.live() {
-            appStore = DeployBarAppStore(environment: live)
-        } else {
-            appStore = DeployBarAppStore(environment: .preview())
-        }
-        appStore.start()
-        _store = State(wrappedValue: appStore)
-    }
+    @State private var startup = DeployBarStartup()
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarContentView(store: store)
+            if let store = startup.store {
+                MenuBarContentView(store: store)
+            } else {
+                StartupFailureView(startup: startup)
+            }
         } label: {
-            MenuBarLabelView(aggregateStatus: store.aggregateStatus)
-                .background(SettingsBridgeView(store: store))
+            if let store = startup.store {
+                MenuBarLabelView(aggregateStatus: store.aggregateStatus)
+                    .background(SettingsBridgeView(store: store))
+            } else {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .accessibilityLabel("DeployBar: Unable to start")
+                    .background(StartupFailureSettingsBridge())
+            }
         }
         .menuBarExtraStyle(.window)
 
         Settings {
-            DeployBarSettingsView(store: store)
+            if let store = startup.store {
+                DeployBarSettingsView(store: store)
+            } else {
+                StartupFailureView(startup: startup)
+            }
         }
 
         Window("Deployment Logs", id: DeployBarWindow.logs.rawValue) {
-            LogsView(store: store)
+            if let store = startup.store {
+                LogsView(store: store)
+            } else {
+                StartupFailureView(startup: startup)
+            }
         }
         .defaultSize(width: 860, height: 560)
         .defaultPosition(.center)
@@ -146,5 +153,44 @@ private struct SettingsBridgeView: View {
         didPresentForCurrentNeed = true
         NSApp.activate()
         openSettings()
+    }
+}
+
+private struct StartupFailureSettingsBridge: View {
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .onAppear { SettingsPresenter.shared.register { openSettings() } }
+            .task {
+                NSApp.activate()
+                openSettings()
+            }
+    }
+}
+
+private struct StartupFailureView: View {
+    let startup: DeployBarStartup
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("DeployBar Couldn't Start", systemImage: "exclamationmark.triangle")
+                .font(.headline)
+            Text("Local storage could not be opened. Monitoring has not started. Check access to DeployBar's Application Support folder, then try again.")
+                .foregroundStyle(.secondary)
+            if let message = startup.errorMessage {
+                Text(message)
+                    .font(.caption)
+                    .textSelection(.enabled)
+            }
+            HStack {
+                Button("Try Again") { startup.retry() }
+                    .buttonStyle(.borderedProminent)
+                Button("Quit") { NSApp.terminate(nil) }
+            }
+        }
+        .padding(20)
+        .frame(width: 380)
     }
 }

@@ -126,7 +126,7 @@ final class VercelAPIClientPaginationTests: XCTestCase {
         configuration.protocolClasses = [StubURLProtocol.self]
         let session = URLSession(configuration: configuration)
 
-        return VercelAPIClient(session: session) {
+        return VercelAPIClient(session: session, appVersion: "0.1.0") {
             "token"
         }
     }

@@ -7,7 +7,7 @@ extension DeployBarAppStore {
         let wasOpen = menuIsOpen
         menuIsOpen = open
 
-        guard phase == .running else {
+        guard phase == .running, !isDisconnecting, !isValidatingToken else {
             return
         }
 
@@ -17,7 +17,7 @@ extension DeployBarAppStore {
     }
 
     public func manualRefresh() {
-        guard phase == .running else {
+        guard phase == .running, !isDisconnecting, !isValidatingToken else {
             return
         }
         startMonitoringLoop(immediate: true)
@@ -111,7 +111,8 @@ extension DeployBarAppStore {
     }
 
     func performRefreshCycle() async -> TimeInterval {
-        guard phase == .running else {
+        let session = sessionGeneration
+        guard phase == .running, !isDisconnecting, !isValidatingToken else {
             return settings.pollingProfile.idleInterval
         }
 
@@ -122,7 +123,7 @@ extension DeployBarAppStore {
                 menuIsOpen: menuIsOpen
             )
 
-            guard phase == .running else {
+            guard phase == .running, isCurrentSession(session) else {
                 return settings.pollingProfile.idleInterval
             }
 
@@ -141,21 +142,25 @@ extension DeployBarAppStore {
             if authUser == nil,
                let recoveredUser = try? await env.vercelClient.validateToken()
             {
+                guard isCurrentSession(session) else { return settings.pollingProfile.idleInterval }
                 authUser = recoveredUser
             }
 
+            guard isCurrentSession(session) else { return settings.pollingProfile.idleInterval }
             if authUser != nil {
                 authConnectionState = .connected
                 tokenError = nil
             }
 
             await handleTransitions(update.transitions)
+            guard isCurrentSession(session) else { return settings.pollingProfile.idleInterval }
             await env.monitoringEngine.markNotified(update.transitions)
+            guard isCurrentSession(session) else { return settings.pollingProfile.idleInterval }
             await purgeOldEventsIfDue()
 
             return update.nextDelay
         } catch let error as DeployBarError {
-            guard phase == .running else {
+            guard phase == .running, isCurrentSession(session) else {
                 return settings.pollingProfile.idleInterval
             }
 
@@ -195,7 +200,7 @@ extension DeployBarAppStore {
         } catch is CancellationError {
             return settings.pollingProfile.activeInterval
         } catch {
-            guard phase == .running else {
+            guard phase == .running, isCurrentSession(session) else {
                 return settings.pollingProfile.idleInterval
             }
 
